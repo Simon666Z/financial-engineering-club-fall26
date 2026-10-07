@@ -1,5 +1,18 @@
 # financial-engineering-club-fall26
 
+## Starter notebook
+
+Start with [`notebooks/Data.ipynb`](notebooks/Data.ipynb) to download S&P 500 daily prices, build simple price and volume features, and create a next-day return target for machine learning exercises.
+
+Install Jupyter and the imported packages in the same Python environment, then open the notebook:
+
+```bash
+python -m pip install --upgrade jupyter pandas numpy requests matplotlib yfinance pyarrow lxml xgboost scikit-learn
+jupyter notebook notebooks/Data.ipynb
+```
+
+Run the cells from top to bottom. Internet access is required for the Wikipedia constituent list and Yahoo Finance downloads. The notebook filters out unavailable tickers. Use a current pandas release for its `future_stack=True` option.
+
 ## Factor Investing Project Structure
 
 ```text
