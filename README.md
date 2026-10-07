@@ -67,3 +67,31 @@ python -m unittest discover -s tests -v
 │   └── utils/              # Shared helpers
 └── tests/                  # Checks for the project code
 ```
+
+## Simon's research showcase
+
+On `SimonResearch`, open [`notebooks/SimonResearch_Showcase.ipynb`](notebooks/SimonResearch_Showcase.ipynb) or run:
+
+```bash
+python3.12 -m venv .venv
+.venv/bin/python -m pip install -r requirements-showcase.txt
+.venv/bin/python scripts/run_showcase.py
+```
+
+The first run downloads the same universe and date range as `Data.ipynb`, fits four fixed models, selects the blend on 2023, and evaluates 2024–2025. It saves a dashboard at [`reports/showcase/index.html`](reports/showcase/index.html), a complete comparison, data hashes, and fitted models locally. Later runs reuse the completed experiment. `--retrain` explicitly repeats training; `--refresh-data` downloads a new snapshot. Repeating experiments after seeing test results makes that window exploratory.
+
+The model combines XGBoost regression, XGBoost LambdaMART ranking, CatBoost, and ElasticNet through a validation-selected blend. It uses the original nine features plus their observable same-day percentiles. Ranking scores and calibrated return estimates are exported separately. The backtest buys the top ten at the next open and sells at that close, charging 10 bps each side. It reports simple reversal and momentum baselines, an equal-weight benchmark, costs, cash slots, and unresolved trades.
+
+The runner handles the bundled OpenMP runtime used by the macOS wheels. For direct model imports or tests on this Mac, launch Python with:
+
+```bash
+DYLD_LIBRARY_PATH="$PWD/.venv/lib/python3.12/site-packages/sklearn/.dylibs" .venv/bin/python -m pytest -q
+```
+
+Use the `.venv` notebook kernel or install its kernel with:
+
+```bash
+.venv/bin/python -m ipykernel install --user --name feclub-research --display-name "FE Club Research"
+```
+
+Raw data, caches, the environment, fitted models, and large prediction/trade tables are ignored by Git. Small measured reports are versioned. See the [research roadmap](docs/research-roadmap.md) for the path from this demo to the eventual paper. This snapshot has current-universe survivorship bias and does not establish live trading profitability.

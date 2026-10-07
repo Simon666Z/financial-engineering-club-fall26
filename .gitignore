@@ -27,3 +27,11 @@ data/processed/*
 
 # Local assistant notes
 AGENTS.md
+
+# Research demo caches and large generated artifacts
+.cache/
+models/showcase/
+reports/showcase/predictions.parquet
+reports/showcase/trades.parquet
+reports/showcase/.mpl-cache/
+catboost_info/
