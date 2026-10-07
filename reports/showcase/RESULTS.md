@@ -21,7 +21,7 @@ The positive gross result does not support profitability under this cost assumpt
 
 ## Reproduce and present
 
-Run `.venv/bin/python scripts/run_showcase.py` to reuse the completed frozen experiment, or open `notebooks/SimonResearch_Showcase.ipynb`. The dashboard is `index.html`; it switches between equity before and after costs. Data snapshots and fitted models are retained locally and excluded from Git. Their hashes, package versions, settings, stopping iterations, calibrated return units, and split boundaries are recorded in `summary.json`.
+Run `.venv/bin/python scripts/run_showcase.py` to reuse the completed frozen experiment, or open `notebooks/SimonResearch_Showcase.ipynb`. The dashboard is `index.html`; it shows the model scheme and strategy equity before and after costs together. Data snapshots and fitted models are retained locally and excluded from Git. Their hashes, package versions, settings, stopping iterations, calibrated return units, and split boundaries are recorded in `summary.json`.
 
 A deliberate new fit uses `--retrain`; a new download uses `--refresh-data`. Test results have now been viewed. Any later development on 2024–2025 must be labeled exploratory, with a new independent confirmation sample reserved for the eventual paper.
 
