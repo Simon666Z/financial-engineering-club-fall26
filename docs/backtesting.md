@@ -1,50 +1,63 @@
-# A simple shared backtest
+# Our shared backtest plan
 
-Each member should build a model, while the group leader maintains one dataset and one evaluation function. Start by comparing prediction rankings; then run every model through the same small portfolio simulation. This document proposes that function; it does not implement it.
+Everyone builds a model. The leader keeps one dataset and one evaluator for fair comparisons. The evaluator still needs to be built.
 
 ```text
-Frozen data → member's model → prediction CSV → shared evaluation → results
+Shared data → your model → prediction CSV → shared evaluator → results
 ```
 
-## 1. Everyone uses the same inputs
+## 1. Use the same inputs
 
-Use the notebook's nine features and next-day close-to-close return target. Keep the shared chronological training, validation, and test periods. All stocks on one date belong to the same period. Fit any scaling or other learned preprocessing only on training data; select model settings on validation data and evaluate the final model once on test data. [scikit-learn's leakage guidance](https://scikit-learn.org/stable/common_pitfalls.html#data-leakage)
+Use the notebook's nine features to predict next-day adjusted-close return. Train through 2022, choose model settings with 2023, and test once on 2024–2025. All stocks on a date stay in the same split.
 
-For the first version, train once and hold the model fixed during the test period. Rolling retraining can wait.
+Fit scaling and other learned data steps on training data only. Future returns and ranks aren't features. [Why this matters](https://scikit-learn.org/stable/common_pitfalls.html#data-leakage)
 
-Each member exports one CSV containing:
+Train once and keep the model fixed during testing. We can add retraining later.
+
+Each member submits one CSV:
 
 | Date | Ticker | prediction |
 |---|---|---|
 | 2025-01-02 | AAPL | 0.0012 |
 
-`Date` is the date whose completed trading-day features produced the prediction. `prediction` is predicted next-day return, expressed as a decimal. Submit one finite prediction per eligible date/ticker, without duplicates. The evaluator checks the shared expected coverage so members cannot quietly omit difficult stocks or days.
+`Date` is the completed trading day used for the prediction. `prediction` is next-day return as a decimal: `0.0012` means `0.12%`.
 
-## 2. First compare ranking quality
+Submit one finite numeric prediction per eligible date and ticker, with no duplicates. The evaluator checks coverage so nobody can skip hard stocks or days. Keep rows without future targets for predictions; drop them for fitting and scoring.
 
-For each test date, compute Spearman correlation between predictions and the notebook's realized next-day close-to-close returns; then average the daily correlations. Positive values indicate that higher predictions tend to identify higher subsequent returns. [pandas supports `corr(method="spearman")`](https://pandas.pydata.org/docs/reference/api/pandas.Series.corr.html).
+## 2. Check the rankings
 
-Report the number of evaluated dates and undefined correlations separately. A day with constant predictions has undefined rank correlation; it is not a zero or a successful day. Ranking results are a prediction check, not a trading profit calculation.
+Compare predicted ranks with realized next-day return ranks using Spearman correlation on each test date, then average the scores. Positive scores mean higher predictions tend to lead to higher returns. [pandas calculation](https://pandas.pydata.org/docs/reference/api/pandas.Series.corr.html)
 
-## 3. One portfolio rule for every model
+Report scored dates and undefined scores separately. Identical predictions, for example, give no ranking to compare. Don't count that as zero or success. Ranking quality isn't trading profit.
 
-- After the close on date `t`, rank stocks by their predictions. Break ties by ticker.
-- Choose the top 10, long only, with equal intended weights. If fewer than 10 are eligible, leave unused slots in cash.
-- Buy at the next trading session's open and sell at that session's close. Hold cash overnight; repeat daily.
-- Use the same fixed assumption of **10 basis points (0.10%) on each buy and each sell**. Report both gross and net results, charging both sides on each executed position.
+## 3. Give every model the same trading rules
 
-The learning target remains close-to-close for simplicity. Its overnight component differs from the simulation's open-to-close holding period. Compute portfolio profit from the actual next-session Open and Close, never directly from `target`. Completed-day features cannot support buying earlier at that day's close.
+- After the close on day `t`, sort predictions from highest to lowest. Break ties by ticker.
+- Buy the top 10, with 10% of the portfolio planned for each. No short positions. If fewer qualify, keep spare slots in cash.
+- Buy at the next market session's open and sell at its close. Hold cash overnight and repeat each day.
+- Charge **0.10% on each buy and each sell** — 10 basis points each way. Report returns before and after costs, charging both sides of every executed trade.
 
-Use one shared market-session calendar; a ticker's next available quote could skip a session. Evaluate only holding periods fully covered by the quote snapshot, and report excluded final horizon dates.
+The target includes the overnight move from close to close; our trades run from the next open to close. Calculate profit from those actual Open and Close prices, never from `target`. Full-day features only support trading afterward.
 
-Determine eligibility using information available on signal date `t`, separately from future label availability. Rank before examining future prices. If a chosen stock lacks a valid next-session opening quote, keep its intended slot in cash; do not substitute another stock. If an entered position has no exit quote, flag the run for unresolved valuation instead of dropping the position or assigning zero return.
+Use one market calendar: a stock's next available quote might skip a session. Include only holding periods covered by the snapshot. Report final dates left out because the holding period ends after the data does.
 
-For comparison, run an equal-weight portfolio of the eligible universe using the same open-to-close timing and cost assumptions.
+Decide which stocks qualify using only information available on day `t`, without requiring future labels. Rank before checking tomorrow's prices. A selected stock with no valid opening price keeps its slot in cash; don't replace it. A bought stock with no closing price makes the result unresolved. Flag it; don't drop the trade or assume zero return.
 
-## 4. Keep the code and results small
+Compare each model with an equal-weight portfolio of all eligible stocks, using the same trading times and costs.
 
-Members work in their own model notebooks. Later, add one shared function in `src/backtests/backtest.py` that accepts predictions and the quote panel and returns daily portfolio returns plus a results table. Save prediction files and results under `reports/`; keep shared generated inputs under `data/processed/`.
+## 4. Keep the code small
 
-Compare mean daily rank correlation, cumulative net return, annualized daily Sharpe ratio, and maximum drawdown. Publish the exact common dates, portfolio rules, costs, and benchmark beside the results.
+Use separate model notebooks. Add one function in `src/backtests/backtest.py` that takes predictions and saved quotes, returning daily portfolio returns and a results table.
 
-The sample uses today's constituent list over past dates, so it has survivorship bias. Available quotes and features are an educational eligibility screen, not historical S&P 500 membership or proof of real-world tradability.
+Save predictions and results in `reports/`. Keep shared generated data in `data/processed/`.
+
+Compare these numbers:
+
+- **Mean daily Spearman score:** how well the model ranks stocks.
+- **Cumulative net return:** the total gain after costs.
+- **Annualized daily Sharpe ratio:** return compared with daily ups and downs, scaled to a year.
+- **Maximum drawdown:** the biggest drop from a previous portfolio high.
+
+Share the exact evaluation dates, trading rules, costs, and benchmark with the results.
+
+The downloaded stock list can favor survivors when studying past years — survivorship bias. Quote and feature checks keep this exercise usable; they don't prove past S&P 500 membership or real-world tradability.

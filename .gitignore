@@ -10,14 +10,14 @@ venv/
 # Jupyter
 .ipynb_checkpoints/
 
-# Environment/secrets
+# Local secrets
 .env
 
-# IDE
+# Editor files
 .vscode/
 .idea/
 
-# Generated shared data snapshots (keep the directory placeholders)
+# Keep saved datasets out of Git, and keep the empty folders
 data/raw/*
 !data/raw/.gitkeep
 data/interim/*

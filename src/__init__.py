@@ -1,1 +1,1 @@
-"""Shared code for the Financial Engineering Club project."""
+"""Shared tools for our club project."""

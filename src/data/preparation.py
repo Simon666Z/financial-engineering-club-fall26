@@ -1,8 +1,7 @@
-"""Clean daily quotes and create the club's shared, causal learning dataset.
+"""Clean stock prices and build our shared ML table.
 
-All functions operate on DataFrames. They never download data or write files.
-The shared session grid deliberately retains missing quotes: a shift of one
-session must mean the next market date, not the next available stock quote.
+Keep missing dates so next-day returns cover just one trading day.
+These helpers work on tables; the notebook downloads and saves the data.
 """
 
 import numpy as np
@@ -18,7 +17,7 @@ QUOTE_COLUMNS = PRICE_COLUMNS + ["Volume"]
 
 
 def _dates(values):
-    """Use normalized, timezone-free dates as the daily join keys."""
+    """Use plain dates without times or timezones."""
     return pd.to_datetime(values, errors="coerce", utc=True).dt.tz_localize(None).dt.normalize()
 
 
@@ -27,16 +26,16 @@ def _tickers(values):
 
 
 def prepare_price_panel(raw_panel, metadata=None):
-    """Return a complete Date x Ticker panel and a row-count cleaning audit.
+    """Clean daily prices and return a table plus check counts.
 
-    Conflicting quotes for the same normalized key are errors. Invalid quotes
-    remain in the calendar but their prices and volume become NaN. Reason
-    counts overlap, so they must not be summed to count invalid rows.
+    Keep one row per date and ticker, including missing prices. Conflicting
+    duplicates raise an error. Bad prices and volume become NaN. One row can
+    fail several checks, so don't add the reason counts to get a total.
     """
     required = ["Date", "Ticker"] + QUOTE_COLUMNS
     missing = sorted(set(required) - set(raw_panel.columns))
     if missing:
-        raise ValueError(f"Missing required quote columns: {missing}")
+        raise ValueError(f"Price table is missing these columns: {missing}")
 
     quotes = raw_panel[required].copy()
     quotes["Date"] = _dates(quotes["Date"])
@@ -45,11 +44,11 @@ def prepare_price_panel(raw_panel, metadata=None):
     audit = {"input_rows": len(quotes), "dropped_invalid_keys": int(bad_key.sum())}
     quotes = quotes.loc[~bad_key].copy()
     if quotes.empty:
-        raise ValueError("No rows have a valid Date and Ticker")
+        raise ValueError("No rows have both a valid Date and Ticker.")
     raw_dates = sorted(quotes["Date"].unique())
     raw_tickers = sorted(quotes["Ticker"].unique())
 
-    # Normalize numerical strings and non-finite values before comparison.
+    # Read numbers from text and turn infinity into missing values.
     quotes[QUOTE_COLUMNS] = quotes[QUOTE_COLUMNS].apply(pd.to_numeric, errors="coerce")
     quotes[QUOTE_COLUMNS] = quotes[QUOTE_COLUMNS].replace([np.inf, -np.inf], np.nan)
     before = len(quotes)
@@ -58,9 +57,9 @@ def prepare_price_panel(raw_panel, metadata=None):
     conflicts = quotes.duplicated(["Date", "Ticker"], keep=False)
     if conflicts.any():
         example = quotes.loc[conflicts, ["Date", "Ticker"]].iloc[0].to_dict()
-        raise ValueError(f"Conflicting quotes for a Date/Ticker key: {example}")
+        raise ValueError(f"Conflicting quotes for this date and ticker: {example}")
 
-    # Build the grid before quote masking, including tickers with no good rows.
+    # Keep every trading date, even when a stock has no price for it.
     grid = pd.MultiIndex.from_product(
         [raw_tickers, raw_dates],
         names=["Ticker", "Date"],
@@ -81,20 +80,20 @@ def prepare_price_panel(raw_panel, metadata=None):
 
     if metadata is not None:
         if "Ticker" not in metadata:
-            raise ValueError("Metadata must have a Ticker column")
+            raise ValueError("Stock details need a Ticker column.")
         meta = metadata.copy()
         meta["Ticker"] = _tickers(meta["Ticker"])
         meta = meta.drop_duplicates()
         if meta["Ticker"].isna().any() or meta["Ticker"].eq("").any():
-            raise ValueError("Metadata contains a missing Ticker")
+            raise ValueError("Stock details contain a missing ticker.")
         if meta["Ticker"].duplicated().any():
-            raise ValueError("Metadata must have one record per normalized Ticker")
+            raise ValueError("Stock details need one record per ticker.")
         collision = sorted((set(meta.columns) & set(panel.columns)) - {"Ticker"})
         if collision:
-            raise ValueError(f"Metadata overlaps quote columns: {collision}")
+            raise ValueError(f"Stock details reuse these price column names: {collision}")
         panel = panel.merge(meta, on="Ticker", how="left", validate="many_to_one", sort=False)
 
-    # All rolling calculations require complete windows; nothing is forward-filled.
+    # Rolling averages and volatility need a full window. Leave price gaps empty.
     groups = panel.groupby("Ticker", sort=False)
     for horizon, name in [(1, "ret_1d"), (5, "mom_5d"), (20, "mom_20d"), (60, "mom_60d")]:
         panel[name] = groups["Adj Close"].pct_change(horizon, fill_method=None)
@@ -112,7 +111,7 @@ def prepare_price_panel(raw_panel, metadata=None):
     panel["SignalEligible"] = panel["QuoteValid"] & panel[FEATURES].notna().all(axis=1)
 
     groups = panel.groupby("Ticker", sort=False)
-    # This is a learning label, not a promise of executable close-to-close trades.
+    # Tomorrow's return is the learning target. Trades use separate entry and exit prices.
     panel["LabelEndDate"] = groups["Date"].shift(-1)
     panel["target"] = groups["Adj Close"].shift(-1) / panel["Adj Close"] - 1
     panel["target"] = panel["target"].replace([np.inf, -np.inf], np.nan)
@@ -131,13 +130,12 @@ def prepare_price_panel(raw_panel, metadata=None):
 
 
 def make_model_dataset(panel, *, labeled_only=True):
-    """Select usable signals and rank observed returns within each market date.
+    """Keep usable feature rows and rank each day's known returns.
 
-    SignalEligible depends only on current/past information. This separate
-    table defaults to requiring a known finite future return for learning.
-    Set labeled_only=False for a shared feature export; learners must drop
-    missing target values before training or evaluating their model.
-    Higher percentiles mean higher realized returns; ties receive their average.
+    SignalEligible uses only today's and past data. By default, keep rows
+    with a known target. Set labeled_only=False to also keep prediction rows
+    without tomorrow's return; drop missing targets when training or scoring.
+    Higher ranks mean higher returns. Ties share their average rank.
     """
     values = pd.to_numeric(panel["target"], errors="coerce").replace([np.inf, -np.inf], np.nan)
     keep = panel["SignalEligible"]
@@ -150,20 +148,20 @@ def make_model_dataset(panel, *, labeled_only=True):
 
 
 def add_date_splits(dataset, train_end="2022-12-31", validation_end="2023-12-31"):
-    """Assign chronological splits, purging labels that cross either cutoff.
+    """Split by date into train, validation, and test.
 
-    Purge an entire signal date if any row's label crosses that split's boundary.
-    This keeps every stock on a date together and prevents future-return leakage.
+    Mark a day 'purged' if a label falls outside its period. All stocks on
+    that day stay together, keeping later returns out of earlier training.
     """
     train_cutoff = pd.Timestamp(train_end).normalize()
     validation_cutoff = pd.Timestamp(validation_end).normalize()
     if pd.isna(train_cutoff) or pd.isna(validation_cutoff) or validation_cutoff <= train_cutoff:
-        raise ValueError("validation_end must be later than train_end")
+        raise ValueError("validation_end must come after train_end.")
     result = dataset.copy()
     result["Date"] = _dates(result["Date"])
     result["LabelEndDate"] = _dates(result["LabelEndDate"])
     if result["Date"].isna().any():
-        raise ValueError("Dataset contains a missing Date")
+        raise ValueError("A row is missing its Date.")
     result["Split"] = np.select(
         [result["Date"].le(train_cutoff), result["Date"].le(validation_cutoff)],
         ["train", "validation"], default="test",

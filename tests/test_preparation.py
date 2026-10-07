@@ -1,4 +1,4 @@
-"""Offline regression checks for the shared data preparation contract."""
+"""Check the data cleaner with made-up prices."""
 
 import sys
 import unittest

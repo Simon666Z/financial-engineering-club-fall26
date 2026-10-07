@@ -1,23 +1,41 @@
-# financial-engineering-club-fall26
+# FE Club · Fall 2026
 
-## Starter notebook
+Pick a model, predict next-day stock returns, and rank the stocks. Everyone uses the same data so we can compare models fairly.
 
-Run [`notebooks/Data.ipynb`](notebooks/Data.ipynb) to prepare the group's shared dataset. It keeps the original nine features and next-day return target, validates daily quotes, and creates common chronological splits: training through 2022, validation in 2023, and testing in 2024–2025.
+## Start here
 
-From the cloned repository, install the data dependencies and open Jupyter:
+Run [`notebooks/Data.ipynb`](notebooks/Data.ipynb) in order. It cleans prices, builds the original nine features, and splits the data by date:
+
+- **Train:** through 2022 — teach your model.
+- **Validation:** 2023 — choose your model settings.
+- **Test:** 2024–2025 — check the final result.
+
+From the cloned repo, install the packages and open the notebook:
 
 ```bash
 python -m pip install jupyter -r requirements-data.txt
 jupyter notebook notebooks/Data.ipynb
 ```
 
-In Colab, first run `!git clone https://github.com/Simon666Z/financial-engineering-club-fall26.git`, then `%cd financial-engineering-club-fall26`. Run the notebook cells from top to bottom.
+In Colab, run these first, then run the notebook cells in order:
 
-The first run needs internet access. Later runs reuse the stock list and raw prices in `data/raw/`. The leader should share the same generated `data/processed/model_data.csv` with every member; the notebook prints its checksum. Generated data is excluded from Git. Keep cached raw quotes for later portfolio evaluation.
+```python
+!git clone https://github.com/Simon666Z/financial-engineering-club-fall26.git
+%cd financial-engineering-club-fall26
+!pip install -r requirements-data.txt
+```
 
-Each member uses only the nine named features, fits a regression model on labeled training rows, and ranks predictions within each date. Fit preprocessing on training data only. The exported table keeps usable prediction rows even when their future target is unavailable; omit those rows only for fitting or scoring.
+## Use the same data
 
-The constituent list comes from the download snapshot, not historical S&P 500 membership. The close-to-close target is a learning label; executable portfolio returns require a separate holding-period calculation. See the [simple shared backtest proposal](docs/backtesting.md).
+The first run needs internet. Later runs reuse the stock list and prices in `data/raw/`. Keep these files for the backtest.
+
+The leader shares one `data/processed/model_data.csv` with everyone. Compare its printed checksum — a file fingerprint — to check everyone has the same snapshot. Generated data stays out of Git.
+
+Use only the notebook's nine listed features as inputs. Predict `target`, the next-day adjusted-close return, then rank predictions within each date. Fit scaling and other learned data steps on training rows only.
+
+Keep rows without a future return for predictions; drop them when training or scoring. Don't use `target_rank`, dates, or extra columns as features.
+
+The downloaded list doesn't track past S&P 500 membership, so results can favor stocks that survived. The target is a learning label; trading profit needs its own price calculation. See the [shared backtest plan](docs/backtesting.md).
 
 Run the data checks with:
 
@@ -25,25 +43,26 @@ Run the data checks with:
 python -m unittest discover -s tests -v
 ```
 
-## Factor Investing Project Structure
+## Where things go
 
 ```text
 .
-├── config/                 # Config files (parameters, paths, settings)
+├── config/                 # Settings and paths
 ├── data/
-│   ├── external/           # Third-party/reference datasets
-│   ├── interim/            # Intermediate transformed datasets
-│   ├── processed/          # Final model-ready datasets
-│   └── raw/                # Original immutable source data
-├── notebooks/              # Research and exploratory analysis notebooks
-├── references/             # Papers, notes, and supporting materials
+│   ├── external/           # Outside reference data
+│   ├── interim/            # Data between cleaning steps
+│   ├── processed/          # Shared model-ready data
+│   └── raw/                # Saved stock list and prices
+├── docs/                   # Group workflow and backtest plan
+├── notebooks/              # Data setup and model experiments
+├── references/             # Papers and notes
 ├── reports/
-│   └── figures/            # Generated charts and report graphics
+│   └── figures/            # Charts for our results
 ├── src/
-│   ├── backtests/          # Backtesting logic
-│   ├── data/               # Data loading and preprocessing
-│   ├── factors/            # Factor construction and signals
-│   ├── portfolio/          # Portfolio construction and optimization
-│   └── utils/              # Shared utilities
-└── tests/                  # Tests for project code
+│   ├── backtests/          # Shared backtest code
+│   ├── data/               # Data loading and cleaning
+│   ├── factors/            # Features and signals
+│   ├── portfolio/          # Stock selection and weights
+│   └── utils/              # Shared helpers
+└── tests/                  # Checks for the project code
 ```

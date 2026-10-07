@@ -1,1 +1,1 @@
-"""Shared data preparation."""
+"""Tools to clean stock data."""
