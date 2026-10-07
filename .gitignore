@@ -16,3 +16,11 @@ venv/
 # IDE
 .vscode/
 .idea/
+
+# Generated shared data snapshots (keep the directory placeholders)
+data/raw/*
+!data/raw/.gitkeep
+data/interim/*
+!data/interim/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
