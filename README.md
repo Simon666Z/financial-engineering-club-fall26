@@ -25,6 +25,10 @@ In Colab, run these first, then run the notebook cells in order:
 !pip install -r requirements-data.txt
 ```
 
+## Try things on your own branch
+
+Please create your own branch for anything that isn't going into our final project, like picking a model or doing trial runs with the data. Keep `main` for work we're including in the final project.
+
 ## Use the same data
 
 Feel free to add your own features, but for now I
