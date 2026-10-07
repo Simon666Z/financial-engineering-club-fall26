@@ -27,11 +27,8 @@ In Colab, run these first, then run the notebook cells in order:
 
 ## Use the same data
 
-The first run needs internet. Later runs reuse the stock list and prices in `data/raw/`. Keep these files for the backtest.
-
-The leader shares one `data/processed/model_data.csv` with everyone. Compare its printed checksum — a file fingerprint — to check everyone has the same snapshot. Generated data stays out of Git.
-
-Use only the notebook's nine listed features as inputs. Predict `target`, the next-day adjusted-close return, then rank predictions within each date. Fit scaling and other learned data steps on training rows only.
+Feel free to add your own features, but for now I
+added some already.
 
 Keep rows without a future return for predictions; drop them when training or scoring. Don't use `target_rank`, dates, or extra columns as features.
 

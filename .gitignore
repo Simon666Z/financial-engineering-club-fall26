@@ -24,3 +24,6 @@ data/interim/*
 !data/interim/.gitkeep
 data/processed/*
 !data/processed/.gitkeep
+
+# Local assistant notes
+AGENTS.md
