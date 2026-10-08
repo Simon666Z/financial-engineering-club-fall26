@@ -1,37 +1,33 @@
-# Frozen model, revised holding strategy
+# Frozen model, costs disabled
 
-The same validation-selected XGBoost Ranker and complete saved forecasts are retained. The data still comes from `Data.ipynb`: 499 usable securities, nine raw features and nine observable same-day percentile transforms; training through 2022, validation in 2023, and 2024–2025 evaluation. The new trading rule was requested after the original test had been viewed, so this is an exploratory strategy revision.
+At Simon's request, transaction costs are temporarily disabled. Borrow fees remain zero. The model, forecasts, dataset, capital allocation and rank-based holding rules are unchanged. This is an exploratory revision of the previously viewed 2024–2025 test.
 
-## Measured results
+## Measured results without costs
 
-| Metric | Selected model strategy |
+| Metric | Selected XGBoost Ranker strategy |
 |---|---:|
 | Initial capital, 2024-01-02 | $1,000,000 |
-| Ending gross equity, 2025-12-31 | $1,081,594.78 |
-| Ending net equity, 2025-12-31 | $748,075.29 |
-| Gross cumulative return | +8.16% |
-| Net cumulative return | -25.19% |
-| Annualized net Sharpe | -2.25 |
-| Maximum net drawdown | -26.54% |
+| Ending equity, 2025-12-31 | $1,081,594.78 |
+| Cumulative return | +8.16% |
+| Annualized Sharpe | 0.65 |
+| Maximum drawdown | -6.98% |
 | Mean daily rank IC | 0.0114 |
 | Resolved return sessions | 501 / 501 |
-| Transaction fees in net book | $319,859.81 |
-| Mean daily traded notional / prior NAV | 73.55% |
+| Transaction and borrow fees | $0 |
+| Mean daily traded notional / prior equity | 73.59% |
 
-The strategy adds longs from the top 20 and shorts from the bottom 20 using ranks known at the prior close. Longs exit after leaving the top 100; shorts after leaving the bottom 100. Both fills occur at the next session's OHLC4 proxy. The first fills are January 3, 2024. Available capital at each signal close is split 50/50 between long purchases and short entry collateral; short proceeds and collateral remain reserved. Existing qualifying positions are kept, so position counts can exceed 20 on either side. Exit releases can fund orders at that day's close for the following session.
+Gross and net ledgers now coincide because both transaction and borrow fees are zero. The positive return is a result without trading costs. The final book holds 31 long and 24 short names, marked at the last close without forced liquidation.
 
-The final net book holds 31 long and 24 short names. Ending equity includes their marked value; there is no invented terminal liquidation or closing commission. There were no missing fills, funding shortfalls or insolvency events in either selected-model book. Gross and net are independently funded simulations, so their difference includes both fees and the resulting sizing/compounding differences.
+## Rules and comparisons
 
-Holding the positions longer does not establish profitability. The gross gain remains overwhelmed by turnover and the stated 10 bps commission per trade side. Borrow fees are zero and every selected security is assumed shortable, so realistic stock-loan frictions would add further constraints.
+The same saved ranker and complete forecast table drive next-session OHLC4 purchases in the top 20 and short additions in the bottom 20. Positions stay until prior-close ranks leave the top/bottom 100. Each signal close allocates available cash 50/50 between longs and short entry collateral; short proceeds remain reserved. Exit releases can fund orders at the fill-day close for the following session. All 501 return sessions resolve without missing selected-model fills, funding shortfalls or insolvency.
 
-## Comparisons and experiment history
+`leaderboard.csv` retains every frozen model and the reversal/momentum signals. XGBoost regression, CatBoost and momentum remain unresolved because they hold FISV when its adjusted-close quote is missing on 2025-11-12. Their portfolio metrics are unavailable; forecast IC remains separately measurable. These comparisons do not change the selected model.
 
-`leaderboard.csv` records every frozen model and the reversal/momentum signals under the same rule. XGBoost regression, CatBoost and momentum cannot be valued completely: they hold FISV when its adjusted-close quote is missing on 2025-11-12. Their portfolio metrics are explicitly unresolved, not flat-return estimates. Their forecast IC remains measurable. The selected ranker is unchanged by these comparisons.
+## Experiment history and reproduction
 
-The original intraday experiment is preserved in [archive/intraday-v1/RESULTS.md](archive/intraday-v1/RESULTS.md), with gross +10.50% and net −59.43%. Its negative result is retained alongside this revision. Model, forecast, raw and prepared data hashes, strategy settings and source hashes are recorded in `summary.json`. Current experiment ID: `8f1bcf189390`.
+The [previous 10 bps holding strategy](archive/hold-v2-10bps/RESULTS.md) ended at $748,075, with net return −25.19%. The [first intraday experiment](archive/intraday-v1/RESULTS.md) is also preserved. Current experiment ID: `f9068e97eaac`. Data, model, forecast and source hashes are recorded in `summary.json`.
 
-## Reproduce
+Run `.venv/bin/python scripts/run_showcase.py` to verify and reuse the saved report. `--rebacktest` recomputes execution without model fitting. The dashboard is `index.html`; the notebook is `notebooks/SimonResearch_Showcase.ipynb`. Costs can later be restored through `config/rank_hold.json`.
 
-Run `.venv/bin/python scripts/run_showcase.py` to verify and reuse the cached report, or add `--rebacktest` to recompute execution with the frozen model. Open `notebooks/SimonResearch_Showcase.ipynb` for the recorded experiment and `index.html` for the simple model/strategy dashboard. `--retrain` explicitly fits again; `--refresh-data` changes and rebuilds the snapshot.
-
-The exact [execution and accounting rules](../../docs/rank-hold-backtest.md) distinguish causal order decisions from dataset quality. OHLC4 is hypothetical, adjusted units provide synthetic corporate-action accounting rather than actual historical shares/dividend cashflows, and current-constituent/Yahoo data retains survivorship and revision bias. Paper research requires stronger data and an independently reserved confirmation period.
+See the [execution and accounting rules](../../docs/rank-hold-backtest.md). OHLC4 remains a hypothetical fill; synthetic adjusted units approximate corporate actions, and current-constituent/Yahoo data retains survivorship and revision bias. The eventual paper still needs stronger data and an independently reserved confirmation period.

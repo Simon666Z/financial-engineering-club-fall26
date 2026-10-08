@@ -168,6 +168,8 @@ def main():
             'dataset_sha256': old['dataset']['sha256'],
             'strategy': old.get('evaluation', {}).get('strategy_name', 'top10_intraday'),
             'net_cumulative_return': old['evaluation']['net_cumulative_return'],
+            'cost_bps': old['evaluation'].get('cost_bps'),
+            'annual_borrow_bps': old['evaluation'].get('annual_borrow_bps', 0.0),
         }]
     reused_model = fitted_path.exists() and not args.retrain and not args.refresh_data
     if reused_model:
@@ -264,7 +266,7 @@ def main():
             'predictors': 'Original nine notebook features and their same-date target-free percentile transforms only.',
             'execution': 'Completed close ranks select next-session top20 long and bottom20 short additions; exits when prior-close own-side rank exceeds100 or is unranked. OHLC4 fills; adjusted-close marks. End positions remain open.',
             'capital': config['capital_policy'],
-            'cost': '10 bps each entry/exit, funded within budgets; cash earns zero. Independent gross/no-cost and net/cost books. Borrow cost defaults to zero; shortability assumed.',
+            'cost': f"{config['cost_bps']:g} bps each entry/exit, funded within budgets; cash earns zero. Independent gross and net books; with both fees zero, their paths coincide. Borrow fee: {config['borrow_fee_bps_annual']:g} bps/year; shortability assumed.",
             'price_basis': 'Raw OHLC4 times Adj Close/Close and adjusted-close marks simulate total-return units. Fixed units embed corporate actions; no extra dividends or split credits. Units are not historical share counts.',
             'signal_units': 'ensemble is a ranking score, not a return. prediction in the latest ranking is a separate 2023-calibrated decimal next-day return estimate.',
             'importance': 'Validation-blend-weighted normalized native importance (absolute standardized coefficients for linear model), combined across raw/rank versions; descriptive, not causal.',
@@ -276,7 +278,7 @@ def main():
             'Adjusted total-return units approximate corporate actions; actual dividend cash timing, short dividend obligations and verified split-share inventories are not modeled.',
             'Short-sale proceeds and equal entry collateral are reserved; real maintenance margin, stock-loan availability, recalls and borrow fees are not modeled.',
             'The fixed next-day forecast target and a multi-day ranking exit strategy have different holding horizons.',
-            '10 bps costs omit market impact, volume participation limits and spread variation. Ending equity includes open positions without terminal liquidation fees.',
+            'Configured transaction and borrow fees are simplified; a zero-fee run excludes trading costs. Market impact, volume participation limits and spread variation are unmodeled. Ending equity includes open positions without terminal liquidation fees.',
             'Only the nine original features and simple observable transforms are used; this is a technical demo, not a novel research contribution.',
             '2023 selects stopping/blending/calibration. Validation is optimistic; repeated test development is exploratory and needs independent paper confirmation.',
             'Latest rankings are historical and have no observed next session; they are not live recommendations.',

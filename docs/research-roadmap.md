@@ -45,3 +45,7 @@ The pipeline works; a profitable strategy has not been established. Preserve thi
 At Simon's request, the same frozen model and forecasts now drive a $1 million long/short strategy: next-session OHLC4 fills for top/bottom 20 additions, exits after prior-close ranks leave top/bottom 100, and daily allocation of available cash with short proceeds reserved. The selected book resolves all 501 return sessions, ending at $748,075 after 10 bps each side: gross +8.16%, net -25.19%, Sharpe -2.25. Turnover still overwhelms the gross gain. The original result is archived; no model was selected using the revised test profit.
 
 This is exploratory execution development, not independent confirmation. Before a paper, determine whether rank persistence and holding rules contain reproducible information beyond turnover changes and simple reversal. Strengthen execution/corporate-action/borrow data and reserve an untouched evaluation window.
+
+## Current run: costs temporarily disabled
+
+At Simon's request, transaction costs are set to zero; borrow fees remain zero. The same frozen model and holding rules end at $1,081,595, with cumulative return +8.16%, Sharpe 0.65 and drawdown -6.98%. This describes returns without trading costs. The earlier 10 bps result is preserved in `reports/showcase/archive/hold-v2-10bps/`; restore realistic costs before assessing economic value for the paper.

@@ -45,7 +45,7 @@ Open holdings are marked at the final observed close. There is no forced final s
 
 ## Assumptions and invalid results
 
-Commissions are **10 basis points (0.10%) per executed buy or sell**, including short entry and cover. A held position incurs no new transaction commission until it trades. Entry budgets include their commission. Borrow fees default to **zero**; all selected stocks are assumed shortable. Real borrow availability, recalls, maintenance margin, spread and market impact are not modeled.
+Transaction costs are currently **disabled (0 basis points)** at Simon's request. The engine retains configurable fees for future runs; when enabled, each entry/exit is charged and entry budgets include the fee. The earlier 10 bps result is preserved in `reports/showcase/archive/hold-v2-10bps/`. Borrow fees default to **zero**; all selected stocks are assumed shortable. Real borrow availability, recalls, maintenance margin, spread and market impact are not modeled.
 
 A missing held closing mark stops that portfolio's evaluation; the code does not substitute a stale price or zero return. A funding shortfall or insolvency invalidates headline performance statistics, blocks further new risk, and preserves the accounting ledger for inspection. A later accounting recovery does not restore valid performance.
 

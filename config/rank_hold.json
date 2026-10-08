@@ -4,7 +4,7 @@
   "entry_k": 20,
   "exit_k": 100,
   "long_fraction": 0.5,
-  "cost_bps": 10.0,
+  "cost_bps": 0.0,
   "allow_additions": true,
   "exit_unranked": true,
   "borrow_fee_bps_annual": 0.0,
