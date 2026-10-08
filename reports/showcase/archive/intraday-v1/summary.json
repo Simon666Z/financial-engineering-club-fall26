@@ -1,0 +1,837 @@
+{
+  "experiment_id": "b073306500b4",
+  "generated_at": "2026-10-07T00:04:19.964495-05:00",
+  "dataset": {
+    "snapshot_created_at": "2026-10-06T23:58:09.384708-05:00",
+    "source": "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies",
+    "price_source": "Yahoo Finance through yfinance",
+    "requested_start": "2016-01-01",
+    "requested_end_exclusive": "2026-01-01",
+    "start": "2016-01-04",
+    "end": "2025-12-31",
+    "rows": 1183015,
+    "quote_rows": 1264542,
+    "tickers": 499,
+    "requested_tickers": 503,
+    "unavailable_tickers": [
+      "FDXF",
+      "HONA",
+      "PSKY"
+    ],
+    "features": [
+      "ret_1d",
+      "mom_5d",
+      "mom_20d",
+      "mom_60d",
+      "vol_5d",
+      "vol_20d",
+      "volume_ratio_20d",
+      "range_pct",
+      "intraday_ret"
+    ],
+    "sha256": "4aa57a8e505bd98a121b59ec0b615ef74ec99183dfdd11e4bf111ee877b36d5c",
+    "prices_sha256": "964a5ce9f5bfe8b92632c5c4a0523d8d8c8f07cf9902d22686415687a4fff4a0",
+    "constituents_sha256": "840cddea923bf2a8a559bcc8214bcd90c3e741d17722f80414541868bbc8bb2e",
+    "raw_snapshot_paths": [
+      "data/raw/prices_2016-01-01_2026-01-01.csv",
+      "data/raw/sp500_2016-01-01_2026-01-01.csv"
+    ],
+    "cleaning": {
+      "input_rows": 1264542,
+      "dropped_invalid_keys": 0,
+      "duplicate_rows_removed": 0,
+      "grid_rows": 1264542,
+      "inserted_missing_rows": 0,
+      "valid_quote_rows": 1215005,
+      "invalid_quote_rows": 49537,
+      "signal_eligible_rows": 1183015,
+      "invalid_reason_counts": {
+        "missing_or_nonfinite_quote": 46794,
+        "nonpositive_price": 0,
+        "nonpositive_volume": 2743,
+        "invalid_ohlc_bounds": 1
+      },
+      "reason_counts_overlap": true
+    },
+    "universe_policy": "Wikipedia constituents at download time; not historical membership"
+  },
+  "splits": {
+    "train": {
+      "start": "2016-03-31",
+      "end": "2022-12-29",
+      "rows": 809852,
+      "labeled_rows": 809834,
+      "dates": 1701
+    },
+    "validation": {
+      "start": "2023-01-03",
+      "end": "2023-12-28",
+      "rows": 122564,
+      "labeled_rows": 122564,
+      "dates": 249
+    },
+    "test": {
+      "start": "2024-01-02",
+      "end": "2025-12-31",
+      "rows": 249614,
+      "labeled_rows": 249114,
+      "dates": 502
+    }
+  },
+  "training": {
+    "seed": 42,
+    "threads": 4,
+    "feature_names": [
+      "ret_1d",
+      "mom_5d",
+      "mom_20d",
+      "mom_60d",
+      "vol_5d",
+      "vol_20d",
+      "volume_ratio_20d",
+      "range_pct",
+      "intraday_ret",
+      "ret_1d__csrank",
+      "mom_5d__csrank",
+      "mom_20d__csrank",
+      "mom_60d__csrank",
+      "vol_5d__csrank",
+      "vol_20d__csrank",
+      "volume_ratio_20d__csrank",
+      "range_pct__csrank",
+      "intraday_ret__csrank"
+    ],
+    "original_features": [
+      "ret_1d",
+      "mom_5d",
+      "mom_20d",
+      "mom_60d",
+      "vol_5d",
+      "vol_20d",
+      "volume_ratio_20d",
+      "range_pct",
+      "intraday_ret"
+    ],
+    "excluded_predictors": [
+      "Ticker",
+      "Date",
+      "Sector",
+      "target",
+      "target_rank",
+      "LabelEndDate",
+      "Split"
+    ],
+    "candidate_params": {
+      "elastic_net": {
+        "alpha": 0.001,
+        "l1_ratio": 0.15,
+        "max_iter": 3000,
+        "tol": 1e-05,
+        "selection": "cyclic"
+      },
+      "xgb_regression": {
+        "n_estimators": 500,
+        "learning_rate": 0.035,
+        "max_depth": 4,
+        "min_child_weight": 35,
+        "subsample": 0.8,
+        "colsample_bytree": 0.9,
+        "reg_lambda": 20.0,
+        "reg_alpha": 0.1,
+        "max_bin": 128,
+        "tree_method": "hist",
+        "device": "cpu",
+        "n_jobs": 4,
+        "random_state": 42,
+        "early_stopping_rounds": 60,
+        "objective": "reg:squarederror",
+        "eval_metric": "rmse"
+      },
+      "xgb_ranker": {
+        "n_estimators": 500,
+        "learning_rate": 0.035,
+        "max_depth": 4,
+        "min_child_weight": 35,
+        "subsample": 0.8,
+        "colsample_bytree": 0.9,
+        "reg_lambda": 20.0,
+        "reg_alpha": 0.1,
+        "max_bin": 128,
+        "tree_method": "hist",
+        "device": "cpu",
+        "n_jobs": 4,
+        "random_state": 42,
+        "early_stopping_rounds": 60,
+        "objective": "rank:ndcg",
+        "eval_metric": "ndcg@50",
+        "ndcg_exp_gain": false,
+        "lambdarank_pair_method": "mean",
+        "lambdarank_num_pair_per_sample": 8
+      },
+      "catboost": {
+        "iterations": 500,
+        "learning_rate": 0.035,
+        "depth": 6,
+        "l2_leaf_reg": 20.0,
+        "loss_function": "RMSE",
+        "eval_metric": "RMSE",
+        "random_seed": 42,
+        "thread_count": 4,
+        "allow_writing_files": false,
+        "verbose": false
+      }
+    },
+    "fitting_seconds": {
+      "elastic_net": 0.11702062500989996,
+      "xgb_regression": 0.9387606249947567,
+      "xgb_ranker": 7.334415416000411,
+      "catboost": 2.4634839159843978
+    },
+    "total_training_seconds": 11.67400166601874,
+    "train_rows": 809834,
+    "validation_rows": 122564,
+    "train_context_rows": 809852,
+    "validation_context_rows": 122564,
+    "unlabeled_context_rows": {
+      "train": 18,
+      "validation": 0
+    },
+    "train_dates": {
+      "start": "2016-03-31",
+      "end": "2022-12-29"
+    },
+    "validation_dates": {
+      "start": "2023-01-03",
+      "end": "2023-12-28"
+    },
+    "fit_cutoff": "2022-12-31",
+    "selection_cutoff": "2023-12-31",
+    "refit_on_validation": false,
+    "regression_target": "same-date centered percentile rank of next-day decimal return, in [-1, 1]",
+    "ranking_target": "same-date return decile relevance grade 0 through 9; equal returns stay tied",
+    "recency_weighting": "three-year half-life; equal aggregate weight for equally recent dates",
+    "validation_rank_ic": {
+      "elastic_net": {
+        "mean": 0.01402552579103863,
+        "scored_days": 249,
+        "undefined_days": 0,
+        "total_days": 249
+      },
+      "xgb_regression": {
+        "mean": 0.0167279452368935,
+        "scored_days": 249,
+        "undefined_days": 0,
+        "total_days": 249
+      },
+      "xgb_ranker": {
+        "mean": 0.020328045548288886,
+        "scored_days": 249,
+        "undefined_days": 0,
+        "total_days": 249
+      },
+      "catboost": {
+        "mean": 0.014789355408335515,
+        "scored_days": 249,
+        "undefined_days": 0,
+        "total_days": 249
+      }
+    },
+    "blend_trials": [
+      {
+        "weights": {
+          "elastic_net": 1.0
+        },
+        "validation_rank_ic": {
+          "mean": 0.01402552579103863,
+          "scored_days": 249,
+          "undefined_days": 0,
+          "total_days": 249
+        }
+      },
+      {
+        "weights": {
+          "xgb_regression": 1.0
+        },
+        "validation_rank_ic": {
+          "mean": 0.0167279452368935,
+          "scored_days": 249,
+          "undefined_days": 0,
+          "total_days": 249
+        }
+      },
+      {
+        "weights": {
+          "xgb_ranker": 1.0
+        },
+        "validation_rank_ic": {
+          "mean": 0.020328045548288886,
+          "scored_days": 249,
+          "undefined_days": 0,
+          "total_days": 249
+        }
+      },
+      {
+        "weights": {
+          "catboost": 1.0
+        },
+        "validation_rank_ic": {
+          "mean": 0.014789355408335515,
+          "scored_days": 249,
+          "undefined_days": 0,
+          "total_days": 249
+        }
+      },
+      {
+        "weights": {
+          "elastic_net": 0.25,
+          "xgb_regression": 0.25,
+          "xgb_ranker": 0.25,
+          "catboost": 0.25
+        },
+        "validation_rank_ic": {
+          "mean": 0.017432166171159058,
+          "scored_days": 249,
+          "undefined_days": 0,
+          "total_days": 249
+        }
+      },
+      {
+        "weights": {
+          "xgb_regression": 0.3333333333333333,
+          "xgb_ranker": 0.3333333333333333,
+          "catboost": 0.3333333333333333
+        },
+        "validation_rank_ic": {
+          "mean": 0.017895543228483805,
+          "scored_days": 249,
+          "undefined_days": 0,
+          "total_days": 249
+        }
+      },
+      {
+        "weights": {
+          "elastic_net": 0.5,
+          "xgb_regression": 0.5
+        },
+        "validation_rank_ic": {
+          "mean": 0.016158954136703072,
+          "scored_days": 249,
+          "undefined_days": 0,
+          "total_days": 249
+        }
+      },
+      {
+        "weights": {
+          "elastic_net": 0.5,
+          "xgb_ranker": 0.5
+        },
+        "validation_rank_ic": {
+          "mean": 0.018053390980577996,
+          "scored_days": 249,
+          "undefined_days": 0,
+          "total_days": 249
+        }
+      },
+      {
+        "weights": {
+          "elastic_net": 0.5,
+          "catboost": 0.5
+        },
+        "validation_rank_ic": {
+          "mean": 0.015071730099253191,
+          "scored_days": 249,
+          "undefined_days": 0,
+          "total_days": 249
+        }
+      },
+      {
+        "weights": {
+          "xgb_regression": 0.5,
+          "xgb_ranker": 0.5
+        },
+        "validation_rank_ic": {
+          "mean": 0.019299157951647012,
+          "scored_days": 249,
+          "undefined_days": 0,
+          "total_days": 249
+        }
+      },
+      {
+        "weights": {
+          "xgb_regression": 0.5,
+          "catboost": 0.5
+        },
+        "validation_rank_ic": {
+          "mean": 0.016137050055897197,
+          "scored_days": 249,
+          "undefined_days": 0,
+          "total_days": 249
+        }
+      },
+      {
+        "weights": {
+          "xgb_ranker": 0.5,
+          "catboost": 0.5
+        },
+        "validation_rank_ic": {
+          "mean": 0.018102562881954515,
+          "scored_days": 249,
+          "undefined_days": 0,
+          "total_days": 249
+        }
+      }
+    ],
+    "selected_weights": {
+      "xgb_ranker": 1.0
+    },
+    "ensemble_validation_rank_ic": {
+      "mean": 0.020328045548288886,
+      "scored_days": 249,
+      "undefined_days": 0,
+      "total_days": 249
+    },
+    "return_calibration": {
+      "intercept": 0.0008838068013755104,
+      "slope": 0.0002934864216292119,
+      "fit_period": "2023 validation only",
+      "output_unit": "decimal next-day return",
+      "positive_slope": true
+    },
+    "output_units": {
+      "elastic_net": "same-date centered percentile score in [-1, 1]",
+      "xgb_regression": "same-date centered percentile score in [-1, 1]",
+      "xgb_ranker": "same-date centered percentile score in [-1, 1]",
+      "catboost": "same-date centered percentile score in [-1, 1]",
+      "ensemble": "convex blend of daily percentile scores in [-1, 1]; not a return",
+      "ensemble_predicted_return": "validation-calibrated decimal next-day return estimate",
+      "reversal": "same-date centered percentile of minus ret_1d",
+      "momentum": "same-date centered percentile of mom_20d"
+    },
+    "best_iterations": {
+      "xgb_regression": 23,
+      "xgb_ranker": 68,
+      "catboost": 70
+    },
+    "test_labels_used": false,
+    "prediction_context": "Supply every eligible stock for a signal date; same-day ranks do not read labels or future dates.",
+    "training_context": "Feature percentiles and validation prediction percentiles use the full observable cross-section before selecting known targets.",
+    "limitations": [
+      "2023 is used for both early stopping and blend selection, so validation results are optimistic.",
+      "Return calibration is a rough affine mean estimate and has no guarantee of realized profit.",
+      "The final test period must be evaluated once and not used to revise this bundle."
+    ],
+    "dataset_sha256": "4aa57a8e505bd98a121b59ec0b615ef74ec99183dfdd11e4bf111ee877b36d5c",
+    "max_iterations": 500,
+    "frozen_at": "2026-10-07T00:04:03.347467-05:00"
+  },
+  "evaluation": {
+    "rank_ic_mean": 0.011387134862174743,
+    "rank_ic_std": 0.1433081289359488,
+    "rank_ic_scored_dates": 501,
+    "rank_ic_undefined_dates": 1,
+    "prediction_rows": 249614,
+    "labeled_prediction_rows": 249114,
+    "unlabeled_prediction_rows": 500,
+    "prediction_coverage": 1.0,
+    "gross_cumulative_return": 0.10502345593512885,
+    "net_cumulative_return": -0.5942969423879774,
+    "annualized_return": -0.36476983767017823,
+    "annualized_sharpe": -2.291526969737428,
+    "annualized_volatility": 0.1899478522975518,
+    "max_drawdown": -0.6091778205455908,
+    "mean_daily_turnover": 1.9982730066182055,
+    "benchmark_gross_cumulative_return": 0.08135390523078545,
+    "benchmark_net_cumulative_return": -0.6029854917437276,
+    "benchmark_annualized_return": -0.37164943443984655,
+    "benchmark_annualized_sharpe": -3.418258033702688,
+    "benchmark_annualized_volatility": 0.13324448758213367,
+    "benchmark_max_drawdown": -0.6031556281870922,
+    "benchmark_mean_daily_turnover": 1.9981847937711892,
+    "signal_dates": 502,
+    "calendar_test_dates": 502,
+    "trading_dates": 501,
+    "resolved_trading_dates": 501,
+    "unresolved_trading_dates": 0,
+    "benchmark_unresolved_trading_dates": 0,
+    "aggregate_resolved_dates": 501,
+    "aggregate_excluded_unresolved_dates": 0,
+    "fully_resolved": true,
+    "aggregate_scope": "Common resolved sessions only; omitted sessions make these conditional, not full-period returns.",
+    "excluded_final_signal_dates": 1,
+    "excluded_final_prediction_rows": 499,
+    "start_date": "2024-01-02",
+    "end_date": "2025-12-31",
+    "holding_start_date": "2024-01-03",
+    "holding_end_date": "2025-12-31",
+    "cost_bps": 10.0,
+    "top_k": 10,
+    "missing_entry_slots": 0,
+    "benchmark_missing_entry_slots": 1,
+    "mean_cash_weight": 0.0,
+    "benchmark_mean_cash_weight": 4.000016000137132e-06
+  },
+  "comparison_evaluations": {
+    "ensemble": {
+      "rank_ic_mean": 0.011387134862174743,
+      "rank_ic_std": 0.1433081289359488,
+      "rank_ic_scored_dates": 501,
+      "rank_ic_undefined_dates": 1,
+      "prediction_rows": 249614,
+      "labeled_prediction_rows": 249114,
+      "unlabeled_prediction_rows": 500,
+      "prediction_coverage": 1.0,
+      "gross_cumulative_return": 0.10502345593512885,
+      "net_cumulative_return": -0.5942969423879774,
+      "annualized_return": -0.36476983767017823,
+      "annualized_sharpe": -2.291526969737428,
+      "annualized_volatility": 0.1899478522975518,
+      "max_drawdown": -0.6091778205455908,
+      "mean_daily_turnover": 1.9982730066182055,
+      "benchmark_gross_cumulative_return": 0.08135390523078545,
+      "benchmark_net_cumulative_return": -0.6029854917437276,
+      "benchmark_annualized_return": -0.37164943443984655,
+      "benchmark_annualized_sharpe": -3.418258033702688,
+      "benchmark_annualized_volatility": 0.13324448758213367,
+      "benchmark_max_drawdown": -0.6031556281870922,
+      "benchmark_mean_daily_turnover": 1.9981847937711892,
+      "signal_dates": 502,
+      "calendar_test_dates": 502,
+      "trading_dates": 501,
+      "resolved_trading_dates": 501,
+      "unresolved_trading_dates": 0,
+      "benchmark_unresolved_trading_dates": 0,
+      "aggregate_resolved_dates": 501,
+      "aggregate_excluded_unresolved_dates": 0,
+      "fully_resolved": true,
+      "aggregate_scope": "Common resolved sessions only; omitted sessions make these conditional, not full-period returns.",
+      "excluded_final_signal_dates": 1,
+      "excluded_final_prediction_rows": 499,
+      "start_date": "2024-01-02",
+      "end_date": "2025-12-31",
+      "holding_start_date": "2024-01-03",
+      "holding_end_date": "2025-12-31",
+      "cost_bps": 10.0,
+      "top_k": 10,
+      "missing_entry_slots": 0,
+      "benchmark_missing_entry_slots": 1,
+      "mean_cash_weight": 0.0,
+      "benchmark_mean_cash_weight": 4.000016000137132e-06
+    },
+    "elastic_net": {
+      "rank_ic_mean": 0.014286285793757144,
+      "rank_ic_std": 0.16929466352703804,
+      "rank_ic_scored_dates": 501,
+      "rank_ic_undefined_dates": 1,
+      "prediction_rows": 249614,
+      "labeled_prediction_rows": 249114,
+      "unlabeled_prediction_rows": 500,
+      "prediction_coverage": 1.0,
+      "gross_cumulative_return": 0.2928766449689084,
+      "net_cumulative_return": -0.525327715749547,
+      "annualized_return": -0.3125706721214321,
+      "annualized_sharpe": -1.5453263990448116,
+      "annualized_volatility": 0.22617905857364173,
+      "max_drawdown": -0.5478773917872345,
+      "mean_daily_turnover": 1.9986136256350742,
+      "benchmark_gross_cumulative_return": 0.08135390523078545,
+      "benchmark_net_cumulative_return": -0.6029854917437276,
+      "benchmark_annualized_return": -0.37164943443984655,
+      "benchmark_annualized_sharpe": -3.418258033702688,
+      "benchmark_annualized_volatility": 0.13324448758213367,
+      "benchmark_max_drawdown": -0.6031556281870922,
+      "benchmark_mean_daily_turnover": 1.9981847937711892,
+      "signal_dates": 502,
+      "calendar_test_dates": 502,
+      "trading_dates": 501,
+      "resolved_trading_dates": 501,
+      "unresolved_trading_dates": 0,
+      "benchmark_unresolved_trading_dates": 0,
+      "aggregate_resolved_dates": 501,
+      "aggregate_excluded_unresolved_dates": 0,
+      "fully_resolved": true,
+      "aggregate_scope": "Common resolved sessions only; omitted sessions make these conditional, not full-period returns.",
+      "excluded_final_signal_dates": 1,
+      "excluded_final_prediction_rows": 499,
+      "start_date": "2024-01-02",
+      "end_date": "2025-12-31",
+      "holding_start_date": "2024-01-03",
+      "holding_end_date": "2025-12-31",
+      "cost_bps": 10.0,
+      "top_k": 10,
+      "missing_entry_slots": 0,
+      "benchmark_missing_entry_slots": 1,
+      "mean_cash_weight": 0.0,
+      "benchmark_mean_cash_weight": 4.000016000137132e-06
+    },
+    "xgb_regression": {
+      "rank_ic_mean": 0.013717310840361761,
+      "rank_ic_std": 0.15357137342198435,
+      "rank_ic_scored_dates": 501,
+      "rank_ic_undefined_dates": 1,
+      "prediction_rows": 249614,
+      "labeled_prediction_rows": 249114,
+      "unlabeled_prediction_rows": 500,
+      "prediction_coverage": 1.0,
+      "gross_cumulative_return": 0.4538457124110369,
+      "net_cumulative_return": -0.46612200056882114,
+      "annualized_return": -0.27070208768807824,
+      "annualized_sharpe": -1.4831892306310814,
+      "annualized_volatility": 0.19944071406175645,
+      "max_drawdown": -0.5285697595902606,
+      "mean_daily_turnover": 1.9984277804517478,
+      "benchmark_gross_cumulative_return": 0.08135390523078545,
+      "benchmark_net_cumulative_return": -0.6029854917437276,
+      "benchmark_annualized_return": -0.37164943443984655,
+      "benchmark_annualized_sharpe": -3.418258033702688,
+      "benchmark_annualized_volatility": 0.13324448758213367,
+      "benchmark_max_drawdown": -0.6031556281870922,
+      "benchmark_mean_daily_turnover": 1.9981847937711892,
+      "signal_dates": 502,
+      "calendar_test_dates": 502,
+      "trading_dates": 501,
+      "resolved_trading_dates": 501,
+      "unresolved_trading_dates": 0,
+      "benchmark_unresolved_trading_dates": 0,
+      "aggregate_resolved_dates": 501,
+      "aggregate_excluded_unresolved_dates": 0,
+      "fully_resolved": true,
+      "aggregate_scope": "Common resolved sessions only; omitted sessions make these conditional, not full-period returns.",
+      "excluded_final_signal_dates": 1,
+      "excluded_final_prediction_rows": 499,
+      "start_date": "2024-01-02",
+      "end_date": "2025-12-31",
+      "holding_start_date": "2024-01-03",
+      "holding_end_date": "2025-12-31",
+      "cost_bps": 10.0,
+      "top_k": 10,
+      "missing_entry_slots": 1,
+      "benchmark_missing_entry_slots": 1,
+      "mean_cash_weight": 0.00019960079840319357,
+      "benchmark_mean_cash_weight": 4.000016000137132e-06
+    },
+    "xgb_ranker": {
+      "rank_ic_mean": 0.011387134862174743,
+      "rank_ic_std": 0.1433081289359488,
+      "rank_ic_scored_dates": 501,
+      "rank_ic_undefined_dates": 1,
+      "prediction_rows": 249614,
+      "labeled_prediction_rows": 249114,
+      "unlabeled_prediction_rows": 500,
+      "prediction_coverage": 1.0,
+      "gross_cumulative_return": 0.10502345593512885,
+      "net_cumulative_return": -0.5942969423879774,
+      "annualized_return": -0.36476983767017823,
+      "annualized_sharpe": -2.291526969737428,
+      "annualized_volatility": 0.1899478522975518,
+      "max_drawdown": -0.6091778205455908,
+      "mean_daily_turnover": 1.9982730066182055,
+      "benchmark_gross_cumulative_return": 0.08135390523078545,
+      "benchmark_net_cumulative_return": -0.6029854917437276,
+      "benchmark_annualized_return": -0.37164943443984655,
+      "benchmark_annualized_sharpe": -3.418258033702688,
+      "benchmark_annualized_volatility": 0.13324448758213367,
+      "benchmark_max_drawdown": -0.6031556281870922,
+      "benchmark_mean_daily_turnover": 1.9981847937711892,
+      "signal_dates": 502,
+      "calendar_test_dates": 502,
+      "trading_dates": 501,
+      "resolved_trading_dates": 501,
+      "unresolved_trading_dates": 0,
+      "benchmark_unresolved_trading_dates": 0,
+      "aggregate_resolved_dates": 501,
+      "aggregate_excluded_unresolved_dates": 0,
+      "fully_resolved": true,
+      "aggregate_scope": "Common resolved sessions only; omitted sessions make these conditional, not full-period returns.",
+      "excluded_final_signal_dates": 1,
+      "excluded_final_prediction_rows": 499,
+      "start_date": "2024-01-02",
+      "end_date": "2025-12-31",
+      "holding_start_date": "2024-01-03",
+      "holding_end_date": "2025-12-31",
+      "cost_bps": 10.0,
+      "top_k": 10,
+      "missing_entry_slots": 0,
+      "benchmark_missing_entry_slots": 1,
+      "mean_cash_weight": 0.0,
+      "benchmark_mean_cash_weight": 4.000016000137132e-06
+    },
+    "catboost": {
+      "rank_ic_mean": 0.016978663592648262,
+      "rank_ic_std": 0.15638578076308685,
+      "rank_ic_scored_dates": 501,
+      "rank_ic_undefined_dates": 1,
+      "prediction_rows": 249614,
+      "labeled_prediction_rows": 249114,
+      "unlabeled_prediction_rows": 500,
+      "prediction_coverage": 1.0,
+      "gross_cumulative_return": 0.2873424112950844,
+      "net_cumulative_return": -0.5272647442273485,
+      "annualized_return": -0.31398312539254947,
+      "annualized_sharpe": -1.5014339519341389,
+      "annualized_volatility": 0.23319178213549763,
+      "max_drawdown": -0.5546755810206994,
+      "mean_daily_turnover": 1.9982120339919371,
+      "benchmark_gross_cumulative_return": 0.08135390523078545,
+      "benchmark_net_cumulative_return": -0.6029854917437276,
+      "benchmark_annualized_return": -0.37164943443984655,
+      "benchmark_annualized_sharpe": -3.418258033702688,
+      "benchmark_annualized_volatility": 0.13324448758213367,
+      "benchmark_max_drawdown": -0.6031556281870922,
+      "benchmark_mean_daily_turnover": 1.9981847937711892,
+      "signal_dates": 502,
+      "calendar_test_dates": 502,
+      "trading_dates": 501,
+      "resolved_trading_dates": 501,
+      "unresolved_trading_dates": 0,
+      "benchmark_unresolved_trading_dates": 0,
+      "aggregate_resolved_dates": 501,
+      "aggregate_excluded_unresolved_dates": 0,
+      "fully_resolved": true,
+      "aggregate_scope": "Common resolved sessions only; omitted sessions make these conditional, not full-period returns.",
+      "excluded_final_signal_dates": 1,
+      "excluded_final_prediction_rows": 499,
+      "start_date": "2024-01-02",
+      "end_date": "2025-12-31",
+      "holding_start_date": "2024-01-03",
+      "holding_end_date": "2025-12-31",
+      "cost_bps": 10.0,
+      "top_k": 10,
+      "missing_entry_slots": 1,
+      "benchmark_missing_entry_slots": 1,
+      "mean_cash_weight": 0.00019960079840319357,
+      "benchmark_mean_cash_weight": 4.000016000137132e-06
+    },
+    "reversal": {
+      "rank_ic_mean": 0.016349889428267483,
+      "rank_ic_std": 0.18333341779644488,
+      "rank_ic_scored_dates": 501,
+      "rank_ic_undefined_dates": 1,
+      "prediction_rows": 249614,
+      "labeled_prediction_rows": 249114,
+      "unlabeled_prediction_rows": 500,
+      "prediction_coverage": 1.0,
+      "gross_cumulative_return": 0.4517603963418926,
+      "net_cumulative_return": -0.4669944528756469,
+      "annualized_return": -0.2713018013335273,
+      "annualized_sharpe": -1.142453248155222,
+      "annualized_volatility": 0.2501588419901069,
+      "max_drawdown": -0.4745739191306413,
+      "mean_daily_turnover": 1.9988667584843465,
+      "benchmark_gross_cumulative_return": 0.08135390523078545,
+      "benchmark_net_cumulative_return": -0.6029854917437276,
+      "benchmark_annualized_return": -0.37164943443984655,
+      "benchmark_annualized_sharpe": -3.418258033702688,
+      "benchmark_annualized_volatility": 0.13324448758213367,
+      "benchmark_max_drawdown": -0.6031556281870922,
+      "benchmark_mean_daily_turnover": 1.9981847937711892,
+      "signal_dates": 502,
+      "calendar_test_dates": 502,
+      "trading_dates": 501,
+      "resolved_trading_dates": 501,
+      "unresolved_trading_dates": 0,
+      "benchmark_unresolved_trading_dates": 0,
+      "aggregate_resolved_dates": 501,
+      "aggregate_excluded_unresolved_dates": 0,
+      "fully_resolved": true,
+      "aggregate_scope": "Common resolved sessions only; omitted sessions make these conditional, not full-period returns.",
+      "excluded_final_signal_dates": 1,
+      "excluded_final_prediction_rows": 499,
+      "start_date": "2024-01-02",
+      "end_date": "2025-12-31",
+      "holding_start_date": "2024-01-03",
+      "holding_end_date": "2025-12-31",
+      "cost_bps": 10.0,
+      "top_k": 10,
+      "missing_entry_slots": 0,
+      "benchmark_missing_entry_slots": 1,
+      "mean_cash_weight": 0.0,
+      "benchmark_mean_cash_weight": 4.000016000137132e-06
+    },
+    "momentum": {
+      "rank_ic_mean": -0.007038491528847246,
+      "rank_ic_std": 0.19117384719602695,
+      "rank_ic_scored_dates": 501,
+      "rank_ic_undefined_dates": 1,
+      "prediction_rows": 249614,
+      "labeled_prediction_rows": 249114,
+      "unlabeled_prediction_rows": 500,
+      "prediction_coverage": 1.0,
+      "gross_cumulative_return": 0.2893365935350227,
+      "net_cumulative_return": -0.5266274254372623,
+      "annualized_return": -0.3135180847389938,
+      "annualized_sharpe": -1.342994503122142,
+      "annualized_volatility": 0.25542917187748965,
+      "max_drawdown": -0.5480079578046169,
+      "mean_daily_turnover": 1.998639367632454,
+      "benchmark_gross_cumulative_return": 0.08135390523078545,
+      "benchmark_net_cumulative_return": -0.6029854917437276,
+      "benchmark_annualized_return": -0.37164943443984655,
+      "benchmark_annualized_sharpe": -3.418258033702688,
+      "benchmark_annualized_volatility": 0.13324448758213367,
+      "benchmark_max_drawdown": -0.6031556281870922,
+      "benchmark_mean_daily_turnover": 1.9981847937711892,
+      "signal_dates": 502,
+      "calendar_test_dates": 502,
+      "trading_dates": 501,
+      "resolved_trading_dates": 501,
+      "unresolved_trading_dates": 0,
+      "benchmark_unresolved_trading_dates": 0,
+      "aggregate_resolved_dates": 501,
+      "aggregate_excluded_unresolved_dates": 0,
+      "fully_resolved": true,
+      "aggregate_scope": "Common resolved sessions only; omitted sessions make these conditional, not full-period returns.",
+      "excluded_final_signal_dates": 1,
+      "excluded_final_prediction_rows": 499,
+      "start_date": "2024-01-02",
+      "end_date": "2025-12-31",
+      "holding_start_date": "2024-01-03",
+      "holding_end_date": "2025-12-31",
+      "cost_bps": 10.0,
+      "top_k": 10,
+      "missing_entry_slots": 0,
+      "benchmark_missing_entry_slots": 1,
+      "mean_cash_weight": 0.0,
+      "benchmark_mean_cash_weight": 4.000016000137132e-06
+    }
+  },
+  "runtime": {
+    "python": "3.12.14 (main, Aug 25 2026, 13:50:33) [Clang 22.1.3 ]",
+    "packages": {
+      "numpy": "2.5.3",
+      "pandas": "2.3.3",
+      "scikit-learn": "1.9.1",
+      "xgboost": "3.4.1",
+      "catboost": "1.2.10",
+      "yfinance": "1.7.0",
+      "matplotlib": "3.11.2"
+    },
+    "source_sha256": {
+      "src/data/preparation.py": "aecb3364a1282e6ec339b4351732e15ca8465e7745dcf1c4d017ea3b5cc7fa37",
+      "src/data/showcase.py": "3c598c1810e6c4a476a70c76d14c2f218b4b15d850f46685d41bc2ebccacebd7",
+      "src/models/showcase.py": "40ab088b7fcb6820937cce39119416dd5785e67588e338aef46028a3ba67ee6d",
+      "src/backtests/showcase.py": "0cbffa682b27ee5904ba732c9dcb012f62f600a730d081e67bd4c93d90e34fc8",
+      "scripts/run_showcase.py": "0f7f5d3d08862af8e3f1b95c627729d70ba293f200367568a8c9aa201be0d903"
+    }
+  },
+  "previous_evaluations": [],
+  "protocol": {
+    "model_selection": "Four fixed model configurations; 2023 RMSE/NDCG chooses stopping iterations, then daily rank IC selects among 12 fixed blends. The selected model is saved before test prediction.",
+    "test_policy": "First recorded fit. No test-based retuning.",
+    "predictors": "Original nine notebook features and their same-date target-free percentile transforms only.",
+    "execution": "Rank after close, top 10 stable ticker ties, equal capital slots, next-session open to close, cash overnight.",
+    "cost": "10 bps each buy/sell; buy cost funded within each slot, no leverage; cash earns zero.",
+    "signal_units": "ensemble is a ranking score, not a return. prediction in the latest ranking is a separate 2023-calibrated decimal next-day return estimate.",
+    "importance": "Validation-blend-weighted normalized native importance (absolute standardized coefficients for linear model), combined across raw/rank versions; descriptive, not causal."
+  },
+  "limitations": [
+    "The Wikipedia universe is current at download time; historical results have survivorship and selection bias.",
+    "The Yahoo Finance snapshot is not a point-in-time institutional dataset; adjusted history can be revised.",
+    "Only the nine original price/volume features and simple observable cross-sectional transforms are used; this is a technical demo, not a novel research contribution.",
+    "Forecast labels include overnight returns; executable portfolio returns cover only next-session open to close.",
+    "Top-10 daily turnover is costly. Commission assumptions omit market impact, volume participation limits, and spread variation.",
+    "Unresolved entries/exits are explicit. Aggregate results use common resolved sessions and are conditional if any are omitted.",
+    "2023 selects stopping/blending/calibration. Validation performance is optimistic; paper research needs an independent confirmation sample.",
+    "Latest rankings are from the end of the historical snapshot and have no observed next session; they are not live stock recommendations.",
+    "Backtest profit is measured, not promised. Ultimate goal remains a publishable paper after literature mapping, a defensible question, stronger data, and robust validation."
+  ]
+}

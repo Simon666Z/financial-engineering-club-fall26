@@ -10,7 +10,7 @@ Build the model demonstration using the universe and price scope in `notebooks/D
 - `vol_5d`, `vol_20d`, `volume_ratio_20d`
 - `range_pct`, `intraday_ret`
 
-Use the chronological training period through 2022, 2023 validation, and 2024–2025 test. Fit and select models using the earlier periods, record all model choices, and distinguish next-day learning targets from executable portfolio returns. Retain costs, drawdowns, simple baselines and unresolved execution observations in the display. No expansion of features, stock universe or dates is needed for this first deliverable.
+Use the chronological training period through 2022, 2023 validation, and 2024–2025 test. Fit and select models using the earlier periods, record all model choices, and distinguish next-day learning targets from executable portfolio returns. Retain costs, drawdowns, simple baselines and unresolved execution observations in the recorded artifacts; keep the dashboard simple. No expansion of features, stock universe or dates is needed for this first deliverable.
 
 The run command is `python scripts/run_showcase.py` in the research environment. `notebooks/SimonResearch_Showcase.ipynb` explains and displays the experiment. `reports/showcase/index.html` is the local presentation artifact; `summary.json` and the accompanying CSVs are its evidence.
 
@@ -39,3 +39,9 @@ Keep the original `Data.ipynb` unchanged. Research artifacts should retain the e
 The first frozen run selected XGBoost ranking alone on 2023 validation. On 501 fully resolved test holding sessions, it recorded rank IC 0.0114, gross cumulative return +10.50%, net cumulative return −59.43% at 10 bps per side, and net Sharpe −2.29. Several components and the simple reversal baseline performed better on the test. The choice was kept frozen rather than replaced after seeing that comparison.
 
 The pipeline works; a profitable strategy has not been established. Preserve this result in the experiment history. The next exploratory iteration can examine target/execution alignment, turnover reduction and strong simple baselines. A future publication must use a separately reserved confirmation sample, since this test has now been inspected.
+
+## Revised holding strategy — 7 October 2026
+
+At Simon's request, the same frozen model and forecasts now drive a $1 million long/short strategy: next-session OHLC4 fills for top/bottom 20 additions, exits after prior-close ranks leave top/bottom 100, and daily allocation of available cash with short proceeds reserved. The selected book resolves all 501 return sessions, ending at $748,075 after 10 bps each side: gross +8.16%, net -25.19%, Sharpe -2.25. Turnover still overwhelms the gross gain. The original result is archived; no model was selected using the revised test profit.
+
+This is exploratory execution development, not independent confirmation. Before a paper, determine whether rank persistence and holding rules contain reproducible information beyond turnover changes and simple reversal. Strengthen execution/corporate-action/borrow data and reserve an untouched evaluation window.

@@ -260,30 +260,46 @@ def verdict_panel(metrics: dict, leaderboard: pd.DataFrame) -> str:
 
 
 
-def strategy_equity_chart(frame: pd.DataFrame, directory: Path) -> str:
-    """Show only the selected strategy's before-cost and after-cost equity."""
+def strategy_equity_chart(
+    frame: pd.DataFrame, directory: Path, *, initial_capital: float | None = None,
+) -> str:
+    """Show actual strategy NAV when available, with an archived-return fallback."""
     fig, ax = plt.subplots(figsize=(9.7, 3.0))
+    use_nav = {"gross_nav", "net_nav"}.issubset(frame.columns)
+    if use_nav:
+        # Both scenarios share the same visible valuation dates.
+        frame = frame.copy()
+        for column in ["gross_nav", "net_nav"]:
+            frame[column] = pd.to_numeric(frame[column], errors="coerce")
+        keep = np.isfinite(frame["gross_nav"]) & np.isfinite(frame["net_nav"])
+        for flag in ["unresolved", "benchmark_unresolved"]:
+            if flag in frame:
+                keep &= ~frame[flag].astype(str).str.lower().isin(["true", "1"])
+        frame = frame.loc[keep]
     plotted = 0
-    for name, label, color in [
-        ("gross_return", "Before costs", GREEN),
-        ("net_return", "After costs", AMBER),
-    ]:
+    columns = [
+        ("gross_nav" if use_nav else "gross_return", "Before costs", GREEN),
+        ("net_nav" if use_nav else "net_return", "After costs", AMBER),
+    ]
+    for name, label, color in columns:
         values = finite_series(frame, name)
         if not values.empty:
-            ax.plot(values["Date"], (1 + values[name]).cumprod(), color=color,
-                    linewidth=1.9, label=label)
+            equity = values[name] / 1_000_000 if use_nav else (1 + values[name]).cumprod()
+            ax.plot(values["Date"], equity, color=color, linewidth=1.9, label=label)
             plotted += 1
     if not plotted:
         plt.close(fig)
-        return empty_chart("No resolved strategy returns were recorded.")
-    ax.axhline(1, color="#bcc9be", linewidth=0.7, linestyle="--")
-    ax.set_ylabel("Growth of 1 unit")
+        return empty_chart("No resolved strategy valuations were recorded.")
+    baseline = float(initial_capital) / 1_000_000 if use_nav and initial_capital is not None else 1.0
+    ax.axhline(baseline, color="#bcc9be", linewidth=0.7, linestyle="--")
+    ax.set_ylabel("Portfolio NAV ($m)" if use_nav else "Growth of 1 unit")
     style_axes(ax)
     ax.legend(loc="lower left", bbox_to_anchor=(0, 1.02), ncol=2,
               frameon=False, fontsize=10, labelcolor=INK)
     format_dates(fig, ax)
     return save_chart(fig, directory, "strategy_equity",
-                      "Selected strategy equity before costs and after costs")
+                      "Selected strategy NAV before costs and after costs" if use_nav
+                      else "Selected strategy equity before costs and after costs")
 
 
 def render_showcase(
@@ -302,9 +318,9 @@ def render_showcase(
     drawdown_chart(portfolio_frame, report_dir)
     ic_chart(frame, report_dir)
     importance_chart(feature_importance, report_dir)
-    strategy_equity = strategy_equity_chart(portfolio_frame, report_dir)
-
     evaluation = summary.get("evaluation", {})
+    nav_frame = frame if {"gross_nav", "net_nav"}.issubset(frame.columns) else portfolio_frame
+    strategy_equity = strategy_equity_chart(nav_frame, report_dir, initial_capital=evaluation.get("initial_capital"))
     training = summary.get("training", {})
     selected = selected_metrics(summary, leaderboard)
     weights = training.get("selected_weights", {}) if isinstance(training, dict) else {}
@@ -321,6 +337,7 @@ def render_showcase(
     else:
         selected_name, selected_weight = "Selected forecast", "See saved model"
     selected_label = "Selected model" if len(active) == 1 else "Selected blend"
+    is_hold_strategy = evaluation.get("strategy_name") == "rank_hold_long_short" or {"gross_nav", "net_nav"}.issubset(frame.columns)
     top_k = compact(evaluation.get("top_k"))
     cost = number(evaluation.get("cost_bps"), 0)
     sessions = compact(evaluation.get("aggregate_resolved_dates", len(portfolio_frame)))
@@ -345,15 +362,37 @@ def render_showcase(
             outcome = "Portfolio results are not yet available."
     except (TypeError, ValueError):
         outcome = "Portfolio results are not yet available."
+    if evaluation.get("performance_valid") is False:
+        outcome = escape(evaluation.get("performance_invalidation_reason") or "Funding rules were breached; accounting NAV is auditable, but performance statistics are invalid.")
     excluded = int(evaluation.get("aggregate_excluded_unresolved_dates", 0) or 0)
     conditional = f" Results use common resolved sessions; {excluded:,} unresolved sessions are excluded." if excluded else ""
+    if is_hold_strategy:
+        strategy_title = "Top 20 long<br>Bottom 20 short"
+        strategy_detail = "Hold while top / bottom 100.<br>Holdings can exceed 20 per side."
+        strategy_caption = ("Prior close ranks → next-session adjusted OHLC4 fills. Deploy free cash 50% long / 50% short, "
+                            "adding to top / bottom 20; hold while top / bottom 100. Exit proceeds become available at the fill-day close. "
+                            f"Short proceeds and 100% entry collateral stay segregated. {cost} bps commission per side.")
+        proxy_note = "OHLC4 is a fill proxy. Adjusted prices and units provide synthetic corporate-action accounting; actual cash dividends are not modeled."
+        if "annual_borrow_bps" in evaluation:
+            proxy_note += f" Borrow fee: {number(evaluation['annual_borrow_bps'], 0)} bps/year."
+        capital = ('<div class="capital">'
+                   f'<span>Initial <b>${number(evaluation.get("initial_capital"), 0)}</b></span>'
+                   f'<span>Ending NAV before costs <b>${number(evaluation.get("final_gross_equity"), 0)}</b></span>'
+                   f'<span>Ending NAV after costs <b>${number(evaluation.get("final_net_equity"), 0)}</b></span></div>')
+        footer = "User-defined hold strategy · Historical demonstration on the notebook universe."
+    else:
+        strategy_title = f"Rank stocks<br>→ Top {top_k}"
+        strategy_detail = "Equal weight."
+        strategy_caption = f"Signal at close → enter next open → exit that day's close. Cash overnight. {cost} bps commission per side; allocations fund buy costs."
+        proxy_note, capital = "", ""
+        footer = "First recorded experiment · Historical demonstration on the notebook universe."
     document = f'''<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FE Club · Model &amp; Strategy</title>
 <style>
 :root{{--bg:#f1f2eb;--paper:#fbfaf6;--ink:#233a33;--muted:#69756e;--green:#216c58;--line:#dce1d5;--warm:#ac733c}}
 *{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:var(--ink);font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:14px;line-height:1.5}}
-main{{max-width:1100px;margin:auto;padding:26px 28px 30px}}header{{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:20px}}.brand{{font-size:13px;font-weight:650}}.brand span{{font-weight:400;color:var(--muted);margin-left:8px}}.period{{font-size:12px;color:var(--muted)}}section{{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:22px 24px;margin-bottom:18px}}h1,h2{{margin:0;font-size:21px;font-weight:600;letter-spacing:-.02em}}.section-head{{display:flex;justify-content:space-between;align-items:baseline;gap:16px;margin-bottom:18px}}.section-head p{{margin:0;color:var(--muted);font-size:12px}}.scheme{{display:grid;grid-template-columns:1fr 16px 1.45fr 16px .88fr 16px 1fr 16px .85fr;gap:8px;align-items:stretch}}.node{{border:1px solid var(--line);border-radius:7px;padding:15px 13px;display:flex;flex-direction:column;justify-content:center;min-height:156px}}.node-title{{font-size:12px;font-weight:600;color:var(--muted);margin:0 0 9px}}.node strong{{font-size:16px;font-weight:600;line-height:1.3}}.node p{{font-size:12px;line-height:1.5;color:var(--muted);margin:8px 0 0}}.arrow{{align-self:center;text-align:center;color:#87948b;font-size:22px}}.candidates{{display:grid;grid-template-columns:1fr 1fr;gap:7px}}.candidate{{font-size:12px;line-height:1.4;border:1px solid var(--line);padding:7px 8px;border-radius:5px;background:#f4f5ef;display:flex;align-items:center;min-height:46px}}.selected{{background:#edf3e9;border-color:#b9cdbb}}.selected strong{{color:var(--green)}}.weight{{display:inline-block;align-self:flex-start;font-size:12px;color:var(--green);margin-top:9px;font-weight:600}}.metrics{{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);border-radius:7px;margin-bottom:16px}}.metric{{padding:14px 18px;border-right:1px solid var(--line)}}.metric:last-child{{border-right:0}}.metric span{{font-size:12px;color:var(--muted);display:block}}.metric strong{{font-weight:500;font-size:28px;letter-spacing:-.03em;display:block;margin-top:4px}}.chart svg{{display:block;width:100%;height:auto}}.chart-empty{{padding:80px 20px;text-align:center;color:var(--muted)}}.strategy{{font-size:12px;line-height:1.6;color:var(--muted);margin:12px 0 0}}.outcome{{margin:11px 0 0;font-size:13px;color:#7e572e}}footer{{font-size:12px;color:var(--muted);margin:3px 0 0}}
+main{{max-width:1100px;margin:auto;padding:26px 28px 30px}}header{{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:20px}}.brand{{font-size:13px;font-weight:650}}.brand span{{font-weight:400;color:var(--muted);margin-left:8px}}.period{{font-size:12px;color:var(--muted)}}section{{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:22px 24px;margin-bottom:18px}}h1,h2{{margin:0;font-size:21px;font-weight:600;letter-spacing:-.02em}}.section-head{{display:flex;justify-content:space-between;align-items:baseline;gap:16px;margin-bottom:18px}}.section-head p{{margin:0;color:var(--muted);font-size:12px}}.scheme{{display:grid;grid-template-columns:1fr 16px 1.45fr 16px .88fr 16px 1fr 16px 1.10fr;gap:8px;align-items:stretch}}.node{{border:1px solid var(--line);border-radius:7px;padding:15px 13px;display:flex;flex-direction:column;justify-content:center;min-height:156px}}.node-title{{font-size:12px;font-weight:600;color:var(--muted);margin:0 0 9px}}.node strong{{font-size:16px;font-weight:600;line-height:1.3}}.node p{{font-size:12px;line-height:1.5;color:var(--muted);margin:8px 0 0}}.arrow{{align-self:center;text-align:center;color:#87948b;font-size:22px}}.candidates{{display:grid;grid-template-columns:1fr 1fr;gap:7px}}.candidate{{font-size:12px;line-height:1.4;border:1px solid var(--line);padding:7px 8px;border-radius:5px;background:#f4f5ef;display:flex;align-items:center;min-height:46px}}.selected{{background:#edf3e9;border-color:#b9cdbb}}.selected strong{{color:var(--green)}}.weight{{display:inline-block;align-self:flex-start;font-size:12px;color:var(--green);margin-top:9px;font-weight:600}}.metrics{{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);border-radius:7px;margin-bottom:16px}}.metric{{padding:14px 18px;border-right:1px solid var(--line)}}.metric:last-child{{border-right:0}}.metric span{{font-size:12px;color:var(--muted);display:block}}.metric strong{{font-weight:500;font-size:28px;letter-spacing:-.03em;display:block;margin-top:4px}}.chart svg{{display:block;width:100%;height:auto}}.chart-empty{{padding:80px 20px;text-align:center;color:var(--muted)}}.capital{{display:flex;gap:24px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin:-3px 0 16px}}.capital b{{color:var(--ink);font-weight:600}}.proxy{{font-size:12px;color:var(--muted);line-height:1.5;margin:8px 0 0}}.strategy{{font-size:12px;line-height:1.6;color:var(--muted);margin:12px 0 0}}.outcome{{margin:11px 0 0;font-size:13px;color:#7e572e}}footer{{font-size:12px;color:var(--muted);margin:3px 0 0}}
 @media(max-width:900px){{.scheme{{grid-template-columns:1fr 1.25fr 1fr;gap:12px}}.arrow{{display:none}}.node{{min-height:130px}}.section-head{{align-items:flex-start;flex-direction:column;gap:4px}}}}
 @media(max-width:600px){{main{{padding:18px 14px}}section{{padding:18px 16px}}header{{align-items:flex-start;flex-direction:column;gap:5px}}.scheme{{grid-template-columns:1fr 1fr}}.node{{padding:12px;min-height:125px}}.candidates{{grid-template-columns:1fr}}.node.candidate-node{{grid-row:span 2}}.metrics{{grid-template-columns:1fr 1fr}}.metric:nth-child(2){{border-right:0}}.metric:nth-child(-n+2){{border-bottom:1px solid var(--line)}}.metric strong{{font-size:25px}}}}
 </style></head><body><main>
@@ -368,10 +407,10 @@ main{{max-width:1100px;margin:auto;padding:26px 28px 30px}}header{{display:flex;
 <div class="arrow" aria-hidden="true">→</div>
 <div class="node selected" role="listitem"><div class="node-title">{selected_label}</div><strong>{selected_name}</strong><span class="weight">{selected_weight}</span></div>
 <div class="arrow" aria-hidden="true">→</div>
-<div class="node" role="listitem"><div class="node-title">Trading strategy</div><strong>Rank stocks<br>→ Top {top_k}</strong><p>Equal weight.</p></div>
+<div class="node" role="listitem"><div class="node-title">Trading strategy</div><strong>{strategy_title}</strong><p>{strategy_detail}</p></div>
 </div></section>
-<section aria-labelledby="results-title"><div class="section-head"><h2 id="results-title">2024–2025 backtest</h2><p>{sessions} trading sessions · Selected model strategy</p></div><div class="metrics">{''.join(cards)}</div><div class="chart">{strategy_equity}</div><p class="strategy">Signal at close → enter next open → exit that day's close. Cash overnight. {cost} bps commission per side; allocations fund buy costs.{conditional}</p><p class="outcome">{outcome}</p></section>
-<footer>First recorded experiment · Historical demonstration on the notebook universe.</footer>
+<section aria-labelledby="results-title"><div class="section-head"><h2 id="results-title">2024–2025 backtest</h2><p>{sessions} trading sessions · Selected model strategy</p></div>{capital}<div class="metrics">{''.join(cards)}</div><div class="chart">{strategy_equity}</div><p class="strategy">{strategy_caption}{conditional}</p><p class="outcome">{outcome}</p><p class="proxy">{proxy_note}</p></section>
+<footer>{footer}</footer>
 </main></body></html>'''
     path = report_dir / "index.html"
     path.write_text(document, encoding="utf-8")

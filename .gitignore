@@ -35,3 +35,5 @@ reports/showcase/predictions.parquet
 reports/showcase/trades.parquet
 reports/showcase/.mpl-cache/
 catboost_info/
+
+reports/showcase/positions.parquet

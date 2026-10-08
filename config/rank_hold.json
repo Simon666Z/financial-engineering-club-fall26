@@ -1,0 +1,15 @@
+{
+  "strategy_name": "rank_hold_long_short",
+  "initial_capital": 1000000.0,
+  "entry_k": 20,
+  "exit_k": 100,
+  "long_fraction": 0.5,
+  "cost_bps": 10.0,
+  "allow_additions": true,
+  "exit_unranked": true,
+  "borrow_fee_bps_annual": 0.0,
+  "start_date": "2024-01-01",
+  "execution_price": "OHLC4 hypothetical full-day proxy, scaled by Adj Close / Close for synthetic total-return units",
+  "capital_policy": "Only free capital known at signal close funds next-session entries. Short proceeds and equal entry cash collateral are reserved. Exit releases can fund the following signal's orders.",
+  "end_policy": "Mark open positions at the final observed close; do not invent a terminal liquidation."
+}
