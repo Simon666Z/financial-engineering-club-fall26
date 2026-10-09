@@ -1,0 +1,690 @@
+{
+  "generated_at": "2026-10-09T20:32:12.247783+00:00",
+  "mode": "metadata-only preflight",
+  "input_fingerprint": "be61b98f09539f7f173b754e669acbbe39ccaf578dfa5f0213d4504b174b0b7d",
+  "model_selector": "v3.5_default",
+  "model_version": "v3.5",
+  "model_config": {
+    "model_path": "v3.5_default",
+    "n_estimators": 4,
+    "random_state": 42,
+    "fit_mode": "fit_with_cache"
+  },
+  "available_aliases": [
+    "v2_default",
+    "v2.5_default",
+    "v2.6_default",
+    "v3_default",
+    "v3.5_default",
+    "v3.5-fast_default"
+  ],
+  "alias_access_note": "Names do not guarantee account entitlement; selectors resolve provider checkpoints.",
+  "settings": {
+    "default_model_version": "v3.5",
+    "max_model_limit": {
+      "train_set_max_rows": 1000000,
+      "train_set_max_cells": 200000000,
+      "train_set_max_upload_cells": 500000000,
+      "test_set_max_rows": 1000000,
+      "max_classes": 160,
+      "max_cols": 20000,
+      "predict_row_pairs_budget": 250000000000,
+      "test_set_max_rows_w_full_regression_output": 300000,
+      "test_set_max_cells": 200000000
+    },
+    "model_limits": {
+      "v2": {
+        "train_set_max_rows": 50000,
+        "train_set_max_cells": 20000000,
+        "train_set_max_upload_cells": 20000000,
+        "test_set_max_rows": 50000,
+        "max_classes": 10,
+        "max_cols": 2000,
+        "predict_row_pairs_budget": 250000000000,
+        "test_set_max_rows_w_full_regression_output": 300000,
+        "test_set_max_cells": 20000000
+      },
+      "v2.5": {
+        "train_set_max_rows": 50000,
+        "train_set_max_cells": 20000000,
+        "train_set_max_upload_cells": 20000000,
+        "test_set_max_rows": 50000,
+        "max_classes": 10,
+        "max_cols": 2000,
+        "predict_row_pairs_budget": 250000000000,
+        "test_set_max_rows_w_full_regression_output": 300000,
+        "test_set_max_cells": 20000000
+      },
+      "v2.6": {
+        "train_set_max_rows": 100000,
+        "train_set_max_cells": 20000000,
+        "train_set_max_upload_cells": 20000000,
+        "test_set_max_rows": 100000,
+        "max_classes": 10,
+        "max_cols": 2000,
+        "predict_row_pairs_budget": 250000000000,
+        "test_set_max_rows_w_full_regression_output": 300000,
+        "test_set_max_cells": 20000000
+      },
+      "v3": {
+        "train_set_max_rows": 1000000,
+        "train_set_max_cells": 200000000,
+        "train_set_max_upload_cells": 200000000,
+        "test_set_max_rows": 1000000,
+        "max_classes": 160,
+        "max_cols": 2000,
+        "predict_row_pairs_budget": 250000000000,
+        "test_set_max_rows_w_full_regression_output": 300000,
+        "test_set_max_cells": 200000000
+      },
+      "v3.5": {
+        "train_set_max_rows": 1000000,
+        "train_set_max_cells": 200000000,
+        "train_set_max_upload_cells": 500000000,
+        "test_set_max_rows": 1000000,
+        "max_classes": 160,
+        "max_cols": 20000,
+        "predict_row_pairs_budget": 250000000000,
+        "test_set_max_rows_w_full_regression_output": 300000,
+        "test_set_max_cells": 200000000
+      },
+      "v3.5-fast": {
+        "train_set_max_rows": 1000000,
+        "train_set_max_cells": 200000000,
+        "train_set_max_upload_cells": 500000000,
+        "test_set_max_rows": 1000000,
+        "max_classes": 160,
+        "max_cols": 20000,
+        "predict_row_pairs_budget": 250000000000,
+        "test_set_max_rows_w_full_regression_output": 300000,
+        "test_set_max_cells": 200000000
+      }
+    },
+    "dataset_max_size_bytes": 5368709120,
+    "async_settings": {
+      "use_above_trainset_size_bytes": 52428800,
+      "poll_timeout_secs": 7200.0
+    }
+  },
+  "usage_before": {
+    "daily_tokens_used": 30000,
+    "daily_token_limit": 5000000,
+    "monthly_tokens_used": 30000,
+    "monthly_token_limit": 20000000,
+    "current_usage": 30000,
+    "usage_limit": 20000000,
+    "reset_time": "2026-11-01 00:00:00 UTC",
+    "monthly_usage": 30000,
+    "monthly_limit": 20000000,
+    "monthly_reset_time": "2026-11-01 00:00:00 UTC",
+    "daily_usage": 30000,
+    "daily_limit": 5000000,
+    "daily_reset_time": "2026-10-10 00:00:00 UTC",
+    "thinking_fit_limit": 0
+  },
+  "quotes_by_test_rows": {
+    "490": {
+      "estimated_cost": 10000,
+      "pricing_version": "quota_v3",
+      "inputs": {
+        "train_rows": 20000,
+        "raw_columns": 48,
+        "test_rows": 490,
+        "model_version": "v3.5",
+        "operation": "predict",
+        "n_estimators": 4,
+        "thinking_effort": null
+      }
+    },
+    "980": {
+      "estimated_cost": 10000,
+      "pricing_version": "quota_v3",
+      "inputs": {
+        "train_rows": 20000,
+        "raw_columns": 48,
+        "test_rows": 980,
+        "model_version": "v3.5",
+        "operation": "predict",
+        "n_estimators": 4,
+        "thinking_effort": null
+      }
+    },
+    "994": {
+      "estimated_cost": 10000,
+      "pricing_version": "quota_v3",
+      "inputs": {
+        "train_rows": 20000,
+        "raw_columns": 48,
+        "test_rows": 994,
+        "model_version": "v3.5",
+        "operation": "predict",
+        "n_estimators": 4,
+        "thinking_effort": null
+      }
+    },
+    "4427": {
+      "estimated_cost": 10000,
+      "pricing_version": "quota_v3",
+      "inputs": {
+        "train_rows": 20000,
+        "raw_columns": 48,
+        "test_rows": 4427,
+        "model_version": "v3.5",
+        "operation": "predict",
+        "n_estimators": 4,
+        "thinking_effort": null
+      }
+    },
+    "9808": {
+      "estimated_cost": 10000,
+      "pricing_version": "quota_v3",
+      "inputs": {
+        "train_rows": 20000,
+        "raw_columns": 48,
+        "test_rows": 9808,
+        "model_version": "v3.5",
+        "operation": "predict",
+        "n_estimators": 4,
+        "thinking_effort": null
+      }
+    },
+    "9820": {
+      "estimated_cost": 10000,
+      "pricing_version": "quota_v3",
+      "inputs": {
+        "train_rows": 20000,
+        "raw_columns": 48,
+        "test_rows": 9820,
+        "model_version": "v3.5",
+        "operation": "predict",
+        "n_estimators": 4,
+        "thinking_effort": null
+      }
+    },
+    "9840": {
+      "estimated_cost": 10000,
+      "pricing_version": "quota_v3",
+      "inputs": {
+        "train_rows": 20000,
+        "raw_columns": 48,
+        "test_rows": 9840,
+        "model_version": "v3.5",
+        "operation": "predict",
+        "n_estimators": 4,
+        "thinking_effort": null
+      }
+    },
+    "9854": {
+      "estimated_cost": 10000,
+      "pricing_version": "quota_v3",
+      "inputs": {
+        "train_rows": 20000,
+        "raw_columns": 48,
+        "test_rows": 9854,
+        "model_version": "v3.5",
+        "operation": "predict",
+        "n_estimators": 4,
+        "thinking_effort": null
+      }
+    },
+    "9860": {
+      "estimated_cost": 10000,
+      "pricing_version": "quota_v3",
+      "inputs": {
+        "train_rows": 20000,
+        "raw_columns": 48,
+        "test_rows": 9860,
+        "model_version": "v3.5",
+        "operation": "predict",
+        "n_estimators": 4,
+        "thinking_effort": null
+      }
+    },
+    "9869": {
+      "estimated_cost": 10000,
+      "pricing_version": "quota_v3",
+      "inputs": {
+        "train_rows": 20000,
+        "raw_columns": 48,
+        "test_rows": 9869,
+        "model_version": "v3.5",
+        "operation": "predict",
+        "n_estimators": 4,
+        "thinking_effort": null
+      }
+    },
+    "9880": {
+      "estimated_cost": 10000,
+      "pricing_version": "quota_v3",
+      "inputs": {
+        "train_rows": 20000,
+        "raw_columns": 48,
+        "test_rows": 9880,
+        "model_version": "v3.5",
+        "operation": "predict",
+        "n_estimators": 4,
+        "thinking_effort": null
+      }
+    },
+    "9912": {
+      "estimated_cost": 10000,
+      "pricing_version": "quota_v3",
+      "inputs": {
+        "train_rows": 20000,
+        "raw_columns": 48,
+        "test_rows": 9912,
+        "model_version": "v3.5",
+        "operation": "predict",
+        "n_estimators": 4,
+        "thinking_effort": null
+      }
+    },
+    "9940": {
+      "estimated_cost": 10000,
+      "pricing_version": "quota_v3",
+      "inputs": {
+        "train_rows": 20000,
+        "raw_columns": 48,
+        "test_rows": 9940,
+        "model_version": "v3.5",
+        "operation": "predict",
+        "n_estimators": 4,
+        "thinking_effort": null
+      }
+    },
+    "9948": {
+      "estimated_cost": 10000,
+      "pricing_version": "quota_v3",
+      "inputs": {
+        "train_rows": 20000,
+        "raw_columns": 48,
+        "test_rows": 9948,
+        "model_version": "v3.5",
+        "operation": "predict",
+        "n_estimators": 4,
+        "thinking_effort": null
+      }
+    },
+    "9960": {
+      "estimated_cost": 10000,
+      "pricing_version": "quota_v3",
+      "inputs": {
+        "train_rows": 20000,
+        "raw_columns": 48,
+        "test_rows": 9960,
+        "model_version": "v3.5",
+        "operation": "predict",
+        "n_estimators": 4,
+        "thinking_effort": null
+      }
+    }
+  },
+  "pilot": {
+    "split": "pilot",
+    "start": 0,
+    "stop": 490,
+    "rows": 490,
+    "first_date": "2023-01-03",
+    "last_date": "2023-01-03"
+  },
+  "causality_batches": [
+    {
+      "split": "pilot",
+      "start": 0,
+      "stop": 490,
+      "rows": 490,
+      "first_date": "2023-01-03",
+      "last_date": "2023-01-03"
+    },
+    {
+      "split": "causality_combined",
+      "start": 0,
+      "stop": 980,
+      "rows": 980,
+      "first_date": "2023-01-03",
+      "last_date": "2023-01-04"
+    },
+    {
+      "split": "causality_mutated",
+      "start": 0,
+      "stop": 980,
+      "rows": 980,
+      "first_date": "2023-01-03",
+      "last_date": "2023-01-04"
+    }
+  ],
+  "full_batches": [
+    {
+      "split": "validation",
+      "start": 0,
+      "stop": 9808,
+      "rows": 9808,
+      "first_date": "2023-01-03",
+      "last_date": "2023-01-31"
+    },
+    {
+      "split": "validation",
+      "start": 9808,
+      "stop": 19628,
+      "rows": 9820,
+      "first_date": "2023-02-01",
+      "last_date": "2023-03-01"
+    },
+    {
+      "split": "validation",
+      "start": 19628,
+      "stop": 29448,
+      "rows": 9820,
+      "first_date": "2023-03-02",
+      "last_date": "2023-03-29"
+    },
+    {
+      "split": "validation",
+      "start": 29448,
+      "stop": 39268,
+      "rows": 9820,
+      "first_date": "2023-03-30",
+      "last_date": "2023-04-27"
+    },
+    {
+      "split": "validation",
+      "start": 39268,
+      "stop": 49088,
+      "rows": 9820,
+      "first_date": "2023-04-28",
+      "last_date": "2023-05-25"
+    },
+    {
+      "split": "validation",
+      "start": 49088,
+      "stop": 58908,
+      "rows": 9820,
+      "first_date": "2023-05-26",
+      "last_date": "2023-06-26"
+    },
+    {
+      "split": "validation",
+      "start": 58908,
+      "stop": 68728,
+      "rows": 9820,
+      "first_date": "2023-06-27",
+      "last_date": "2023-07-25"
+    },
+    {
+      "split": "validation",
+      "start": 68728,
+      "stop": 78548,
+      "rows": 9820,
+      "first_date": "2023-07-26",
+      "last_date": "2023-08-22"
+    },
+    {
+      "split": "validation",
+      "start": 78548,
+      "stop": 88368,
+      "rows": 9820,
+      "first_date": "2023-08-23",
+      "last_date": "2023-09-20"
+    },
+    {
+      "split": "validation",
+      "start": 88368,
+      "stop": 98188,
+      "rows": 9820,
+      "first_date": "2023-09-21",
+      "last_date": "2023-10-18"
+    },
+    {
+      "split": "validation",
+      "start": 98188,
+      "stop": 108008,
+      "rows": 9820,
+      "first_date": "2023-10-19",
+      "last_date": "2023-11-15"
+    },
+    {
+      "split": "validation",
+      "start": 108008,
+      "stop": 117828,
+      "rows": 9820,
+      "first_date": "2023-11-16",
+      "last_date": "2023-12-14"
+    },
+    {
+      "split": "validation",
+      "start": 117828,
+      "stop": 122255,
+      "rows": 4427,
+      "first_date": "2023-12-15",
+      "last_date": "2023-12-28"
+    },
+    {
+      "split": "test",
+      "start": 0,
+      "stop": 9840,
+      "rows": 9840,
+      "first_date": "2024-01-02",
+      "last_date": "2024-01-30"
+    },
+    {
+      "split": "test",
+      "start": 9840,
+      "stop": 19680,
+      "rows": 9840,
+      "first_date": "2024-01-31",
+      "last_date": "2024-02-28"
+    },
+    {
+      "split": "test",
+      "start": 19680,
+      "stop": 29520,
+      "rows": 9840,
+      "first_date": "2024-02-29",
+      "last_date": "2024-03-27"
+    },
+    {
+      "split": "test",
+      "start": 29520,
+      "stop": 39360,
+      "rows": 9840,
+      "first_date": "2024-03-28",
+      "last_date": "2024-04-25"
+    },
+    {
+      "split": "test",
+      "start": 39360,
+      "stop": 49214,
+      "rows": 9854,
+      "first_date": "2024-04-26",
+      "last_date": "2024-05-23"
+    },
+    {
+      "split": "test",
+      "start": 49214,
+      "stop": 59074,
+      "rows": 9860,
+      "first_date": "2024-05-24",
+      "last_date": "2024-06-24"
+    },
+    {
+      "split": "test",
+      "start": 59074,
+      "stop": 68934,
+      "rows": 9860,
+      "first_date": "2024-06-25",
+      "last_date": "2024-07-23"
+    },
+    {
+      "split": "test",
+      "start": 68934,
+      "stop": 78794,
+      "rows": 9860,
+      "first_date": "2024-07-24",
+      "last_date": "2024-08-20"
+    },
+    {
+      "split": "test",
+      "start": 78794,
+      "stop": 88654,
+      "rows": 9860,
+      "first_date": "2024-08-21",
+      "last_date": "2024-09-18"
+    },
+    {
+      "split": "test",
+      "start": 88654,
+      "stop": 98523,
+      "rows": 9869,
+      "first_date": "2024-09-19",
+      "last_date": "2024-10-16"
+    },
+    {
+      "split": "test",
+      "start": 98523,
+      "stop": 108403,
+      "rows": 9880,
+      "first_date": "2024-10-17",
+      "last_date": "2024-11-13"
+    },
+    {
+      "split": "test",
+      "start": 108403,
+      "stop": 118283,
+      "rows": 9880,
+      "first_date": "2024-11-14",
+      "last_date": "2024-12-12"
+    },
+    {
+      "split": "test",
+      "start": 118283,
+      "stop": 128163,
+      "rows": 9880,
+      "first_date": "2024-12-13",
+      "last_date": "2025-01-14"
+    },
+    {
+      "split": "test",
+      "start": 128163,
+      "stop": 138043,
+      "rows": 9880,
+      "first_date": "2025-01-15",
+      "last_date": "2025-02-12"
+    },
+    {
+      "split": "test",
+      "start": 138043,
+      "stop": 147923,
+      "rows": 9880,
+      "first_date": "2025-02-13",
+      "last_date": "2025-03-13"
+    },
+    {
+      "split": "test",
+      "start": 147923,
+      "stop": 157835,
+      "rows": 9912,
+      "first_date": "2025-03-14",
+      "last_date": "2025-04-10"
+    },
+    {
+      "split": "test",
+      "start": 157835,
+      "stop": 167775,
+      "rows": 9940,
+      "first_date": "2025-04-11",
+      "last_date": "2025-05-09"
+    },
+    {
+      "split": "test",
+      "start": 167775,
+      "stop": 177715,
+      "rows": 9940,
+      "first_date": "2025-05-12",
+      "last_date": "2025-06-09"
+    },
+    {
+      "split": "test",
+      "start": 177715,
+      "stop": 187655,
+      "rows": 9940,
+      "first_date": "2025-06-10",
+      "last_date": "2025-07-09"
+    },
+    {
+      "split": "test",
+      "start": 187655,
+      "stop": 197615,
+      "rows": 9960,
+      "first_date": "2025-07-10",
+      "last_date": "2025-08-06"
+    },
+    {
+      "split": "test",
+      "start": 197615,
+      "stop": 207575,
+      "rows": 9960,
+      "first_date": "2025-08-07",
+      "last_date": "2025-09-04"
+    },
+    {
+      "split": "test",
+      "start": 207575,
+      "stop": 217535,
+      "rows": 9960,
+      "first_date": "2025-09-05",
+      "last_date": "2025-10-02"
+    },
+    {
+      "split": "test",
+      "start": 217535,
+      "stop": 227495,
+      "rows": 9960,
+      "first_date": "2025-10-03",
+      "last_date": "2025-10-30"
+    },
+    {
+      "split": "test",
+      "start": 227495,
+      "stop": 237443,
+      "rows": 9948,
+      "first_date": "2025-10-31",
+      "last_date": "2025-11-28"
+    },
+    {
+      "split": "test",
+      "start": 237443,
+      "stop": 247383,
+      "rows": 9940,
+      "first_date": "2025-12-01",
+      "last_date": "2025-12-29"
+    },
+    {
+      "split": "test",
+      "start": 247383,
+      "stop": 248377,
+      "rows": 994,
+      "first_date": "2025-12-30",
+      "last_date": "2025-12-31"
+    }
+  ],
+  "pilot_quoted_tokens": 10000,
+  "full_quoted_tokens": 390000,
+  "full_reserved_tokens_with_headroom": 448500,
+  "full_prediction_requests": 39,
+  "diagnostic_quoted_tokens": 30000,
+  "source_links": [
+    "https://docs.priorlabs.ai/models/selecting-model-version",
+    "https://docs.priorlabs.ai/api/metering",
+    "https://docs.priorlabs.ai/api/rate-limits",
+    "https://docs.priorlabs.ai/api/security",
+    "https://github.com/PriorLabs/tabpfn-client/blob/main/CHANGELOG.md",
+    "https://pypi.org/project/tabpfn-client/0.6.1/",
+    "https://github.com/PriorLabs/TabPFN/blob/main/src/tabpfn/architectures/tabpfn_v3_5.py",
+    "https://arxiv.org/pdf/2605.13986",
+    "https://storage.googleapis.com/prior-labs-tabpfn-public/reports/tabpfn-v3.5-report.pdf"
+  ],
+  "cache_enabled": true,
+  "quote_policy": "Standard prediction quote reserves for possible cache fallback.",
+  "budget_note": "Local requests bounded by server quotes plus 15% headroom; provider final billing may differ. Timeout/failed compute is never automatically retried.",
+  "historical_note": "TabPFN-3.5 was released September 2026; this is a retrospective foundation-model comparison, not a model available during 2024-25."
+}

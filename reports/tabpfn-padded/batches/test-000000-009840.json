@@ -1,0 +1,64 @@
+{
+  "provider_metadata": {
+    "test_set_num_rows": 10000,
+    "test_set_num_cols": 48,
+    "n_estimators": 4,
+    "billing_model_version": "v3.5",
+    "execution_mode": "cache",
+    "cache_outcome": "hit",
+    "task": "regression",
+    "package_version": "9.0.0",
+    "tabpfn_config": {
+      "n_estimators": 4,
+      "categorical_features_indices": [],
+      "softmax_temperature": null,
+      "average_before_softmax": false,
+      "random_state": 42,
+      "inference_config": {
+        "TRANSFORM_DATES": false,
+        "TRANSFORM_TEXT": false
+      },
+      "inference_precision": "auto",
+      "ignore_pretraining_limits": true,
+      "n_preprocessing_jobs": 4,
+      "fit_mode": "fit_with_cache",
+      "device": [
+        "cuda:0"
+      ],
+      "memory_saving_mode": true,
+      "model_path": "/app/tabpfn_models/tabpfn-v3.5-20260909.safetensors"
+    }
+  },
+  "timings": {
+    "test_set_transform_queue_wait_s": 0.084,
+    "test_set_transform_s": 0.29,
+    "predict_queue_wait_s": 14.454,
+    "predict_s": 0.696
+  },
+  "usage_headers": {},
+  "batch": {
+    "split": "test",
+    "start": 0,
+    "stop": 9840,
+    "rows": 9840,
+    "first_date": "2024-01-02",
+    "last_date": "2024-01-30"
+  },
+  "input_fingerprint": "27358545938e9afba130aa5ed46faf091b956a0251ae0335dd1f094d4f4596ed",
+  "query_protocol": {
+    "name": "fixed_shape_train_only_padding_v1",
+    "query_rows": 10000,
+    "dtype": "float32",
+    "padding_value": 0.0,
+    "padding_placement": "tail",
+    "feature_transform_timing": "complete real date cross-sections before packing",
+    "ordering": "Date,Ticker",
+    "discard_dummy_outputs": true,
+    "block_policy": "greedy chronological whole dates; start depends only on past/current row counts"
+  },
+  "uploaded_query_sha256": "c00adfd6c3b6abcb800a6694e86891547890270129f9410b80f4f5b102078c0d",
+  "real_rows": 9840,
+  "query_rows": 10000,
+  "target_units": "Centered same-date next-day adjusted-close return rank in [-1,1]",
+  "prediction_units": "regression mean of documented training target; ranking score, not calibrated decimal return"
+}

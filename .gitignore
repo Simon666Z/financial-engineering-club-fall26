@@ -51,3 +51,14 @@ reports/tabpfn/*.parquet
 .venv-tabpfn/
 
 reports/tabpfn/**/*.parquet
+
+models/tabpfn-cached/
+models/tabpfn-daily/
+reports/tabpfn-cached/**/*.parquet
+reports/tabpfn-cached/*.parquet
+reports/tabpfn-daily/**/*.parquet
+reports/tabpfn-daily/*.parquet
+
+models/tabpfn-padded/
+reports/tabpfn-padded/*.parquet
+reports/tabpfn-padded/**/*.parquet

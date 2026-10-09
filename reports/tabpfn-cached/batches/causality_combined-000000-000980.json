@@ -1,0 +1,50 @@
+{
+  "provider_metadata": {
+    "test_set_num_rows": 980,
+    "test_set_num_cols": 48,
+    "n_estimators": 4,
+    "billing_model_version": "v3.5",
+    "execution_mode": "cache",
+    "cache_outcome": "hit",
+    "task": "regression",
+    "package_version": "9.0.0",
+    "tabpfn_config": {
+      "n_estimators": 4,
+      "categorical_features_indices": [],
+      "softmax_temperature": null,
+      "average_before_softmax": false,
+      "random_state": 42,
+      "inference_config": {
+        "TRANSFORM_DATES": false,
+        "TRANSFORM_TEXT": false
+      },
+      "inference_precision": "auto",
+      "ignore_pretraining_limits": true,
+      "n_preprocessing_jobs": 4,
+      "fit_mode": "fit_with_cache",
+      "device": [
+        "cuda:0"
+      ],
+      "memory_saving_mode": true,
+      "model_path": "/app/tabpfn_models/tabpfn-v3.5-20260909.safetensors"
+    }
+  },
+  "timings": {
+    "test_set_transform_queue_wait_s": 0.084,
+    "test_set_transform_s": 0.257,
+    "predict_queue_wait_s": 0.099,
+    "predict_s": 0.171
+  },
+  "usage_headers": {},
+  "batch": {
+    "split": "causality_combined",
+    "start": 0,
+    "stop": 980,
+    "rows": 980,
+    "first_date": "2023-01-03",
+    "last_date": "2023-01-04"
+  },
+  "input_fingerprint": "be61b98f09539f7f173b754e669acbbe39ccaf578dfa5f0213d4504b174b0b7d",
+  "target_units": "Centered same-date next-day adjusted-close return rank in [-1,1]",
+  "prediction_units": "regression mean of documented training target; ranking score, not calibrated decimal return"
+}

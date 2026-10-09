@@ -2,8 +2,9 @@
 
 Wire schemas were checked against the official tabpfn-client 0.6.1 release.
 The high-level SDK retries prediction timeouts. This adapter deliberately makes
-one HTTP attempt per operation and sends no SDK telemetry. Standard inference
-is used, without Thinking, automatic subsampling, or a KV-cache cost assumption.
+one HTTP attempt per operation and sends no SDK telemetry. Both preprocessing
+and cached fits are supported, without Thinking or automatic subsampling.
+Standard prediction quotes reserve for possible cached-inference fallback.
 
 A local token guard bounds quoted requests with 15% headroom. Prior Labs can
 adjust a final charge after compute begins; its API has no documented hard
@@ -72,6 +73,17 @@ def write_json(path: Path, value: Any) -> None:
 def model_config() -> dict[str, Any]:
     return {"model_path": MODEL_PATH, "n_estimators": N_ESTIMATORS,
             "random_state": SEED, "fit_mode": "fit_preprocessors"}
+
+
+def cached_model_config() -> dict[str, Any]:
+    """A separate context fit: cache training state, never prior query rows."""
+    return {**model_config(), "fit_mode": "fit_with_cache"}
+
+
+def validate_model_config(config: dict[str, Any]) -> dict[str, Any]:
+    if config not in (model_config(), cached_model_config()):
+        raise ValueError("Only the fixed model/n_estimators/seed and supported fit modes are allowed.")
+    return dict(config)
 
 
 def validate_manifest(manifest: dict[str, Any]) -> list[str]:
@@ -269,11 +281,13 @@ def server_batch_limit(settings: dict[str, Any], train_rows: int, columns: int) 
     return min(caps)
 
 
-def quote_payload(train_rows: int, test_rows: int, columns: int = FEATURE_COUNT) -> dict[str, Any]:
+def quote_payload(train_rows: int, test_rows: int, columns: int = FEATURE_COUNT, *, operation: str = "predict") -> dict[str, Any]:
     if min(train_rows, test_rows, columns) < 1:
         raise ValueError("Quote dimensions must be positive.")
+    if operation not in {"predict", "cache_predict"}:
+        raise ValueError("Only standard or cache prediction quotes are supported.")
     return {"train_rows": train_rows, "test_rows": test_rows, "raw_columns": columns,
-            "model_version": MODEL_VERSION, "operation": "predict", "n_estimators": N_ESTIMATORS}
+            "model_version": MODEL_VERSION, "operation": operation, "n_estimators": N_ESTIMATORS}
 
 
 def validate_quote(quote: dict[str, Any], expected: dict[str, Any]) -> int:
@@ -320,7 +334,7 @@ def validate_batch_independence(proof: dict[str, Any], fingerprint: str, record:
     Numerical checks corroborate the architecture; they cannot prove every
     possible future-query mutation. They must use this exact fit/configuration.
     """
-    if proof.get("input_fingerprint") != fingerprint or proof.get("fitted_train_set_id") != record.get("fitted_train_set_id") or proof.get("model_config") != model_config():
+    if proof.get("input_fingerprint") != fingerprint or proof.get("fitted_train_set_id") != record.get("fitted_train_set_id") or proof.get("model_config") != validate_model_config(record.get("model_config", model_config())):
         raise ValueError("Batch-independence evidence belongs to another context or model.")
     tolerance = proof.get("tolerance")
     if not isinstance(tolerance, (int, float)) or not math.isfinite(tolerance) or not 0 <= tolerance <= 1e-6:
@@ -436,7 +450,8 @@ class TabPFNAPI:
         frame.to_parquet(output, index=False, compression="zstd")
         return output.getvalue()
 
-    def fit(self, features: pd.DataFrame, labels: np.ndarray) -> dict[str, Any]:
+    def fit(self, features: pd.DataFrame, labels: np.ndarray, *, config: dict[str, Any] | None = None) -> dict[str, Any]:
+        config = validate_model_config(config or model_config())
         x_content = self._parquet(features)
         y_content = self._parquet(pd.DataFrame({"target": labels}))
         prep, status = self._request("POST", "/tabpfn/prepare_train_set_upload", json={
@@ -448,10 +463,10 @@ class TabPFNAPI:
             self._upload(y_content, prep["y_train_info"])
         response, _ = self._request("POST", "/tabpfn/fit", json={
             "train_set_upload_id": prep["train_set_upload_id"],
-            "task_config": {"task": "regression", "tabpfn_config": model_config()},
+            "task_config": {"task": "regression", "tabpfn_config": config},
             "tabpfn_systems": ["preprocessing", "text"]})
-        record = {"fitted_train_set_id": response["fitted_train_set_id"], "model_config": model_config(), "fit_timings": response.get("timings"),
-                  "fit_mode": "standard; Thinking disabled; no automatic subsampling"}
+        record = {"fitted_train_set_id": response["fitted_train_set_id"], "model_config": config, "fit_timings": response.get("timings"),
+                  "fit_mode": config["fit_mode"], "thinking_enabled": False, "automatic_subsampling": False}
         if response.get("status") == "pending":
             deadline = time.monotonic() + 900
             while time.monotonic() < deadline:
@@ -469,6 +484,7 @@ class TabPFNAPI:
         return record
 
     def predict(self, features: pd.DataFrame, record: dict[str, Any]) -> tuple[np.ndarray, dict[str, Any]]:
+        config = validate_model_config(record.get("model_config", model_config()))
         content = self._parquet(features)
         prep, status = self._request("POST", "/tabpfn/prepare_test_set_upload", json={
             "fitted_train_set_id": record["fitted_train_set_id"],
@@ -477,7 +493,7 @@ class TabPFNAPI:
             self._upload(content, prep["x_test_info"])
         response, _ = self._request("POST", "/tabpfn/predict", json={
             "test_set_upload_id": prep["test_set_upload_id"], "fitted_train_set_id": record["fitted_train_set_id"],
-            "task_config": {"task": "regression", "tabpfn_config": model_config(), "predict_params": {"output_type": "mean"}}})
+            "task_config": {"task": "regression", "tabpfn_config": config, "predict_params": {"output_type": "mean"}}})
         prediction = response.get("prediction")
         if prediction is None and "prediction_uri" in response:
             prediction = self._storage_request("GET", response["prediction_uri"]).json()
@@ -492,6 +508,9 @@ class TabPFNAPI:
         metadata = response.get("metadata", {})
         if metadata.get("n_estimators", N_ESTIMATORS) != N_ESTIMATORS or metadata.get("billing_model_version", MODEL_VERSION) != MODEL_VERSION:
             raise RuntimeError("Provider used different model settings; stop before another charge.")
+        actual_config = metadata.get("tabpfn_config")
+        if actual_config is not None and any(actual_config.get(field) != config[field] for field in ("n_estimators", "random_state", "fit_mode")):
+            raise RuntimeError("Provider reported different model configuration; stop before another charge.")
         if metadata.get("execution_mode") == "thinking":
             raise RuntimeError("Provider unexpectedly used Thinking mode; stop before another charge.")
         return values, {"provider_metadata": metadata, "timings": response.get("timings"), "usage_headers": dict(self.last_headers)}

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import html
+import io
 import json
 from pathlib import Path
 from typing import Any
@@ -510,8 +511,11 @@ def render_showcase(
             external_notes.append(f'{escape(model_name(name))}: {escape(explanation)} '
                                   f'Training context: {context} rows. Full-test performance is not measured.')
         else:
+            protocol = " Each prediction request contains one signal date only." if details.get("batch_mode") == "single_date" else ""
+            if isinstance(details.get("query_protocol"), dict):
+                protocol = " Fixed-size queries use frozen real features followed by zero padding; the matching causality diagnostic passed."
             external_notes.append(f'{escape(model_name(name))} is a separate API candidate with a fixed {context}-row training context; '
-                                  'it is not included in the frozen blend.')
+                                  'it is not included in the frozen blend.' + protocol)
     external_note = ('<p class="comparison-note">' + " ".join(external_notes)
                      + ' <a href="https://github.com/Simon666Z/financial-engineering-club-fall26/blob/SimonResearch/docs/tabpfn.md">TabPFN experiment details</a>.</p>') if external_notes else ""
     training = summary.get("training", {})
@@ -682,8 +686,28 @@ EXTERNAL_FILES = (
 
 def external_candidate_inputs(root: Path) -> dict[str, str]:
     """Fingerprint local optional inputs so cached reports notice status changes."""
-    return {relative: hashlib.sha256((Path(root) / relative).read_bytes()).hexdigest()
-            for relative in EXTERNAL_FILES if (Path(root) / relative).is_file()}
+    root = Path(root)
+    files = set(EXTERNAL_FILES)
+    run_path = root / "reports/tabpfn/run.json"
+    if run_path.is_file():
+        metadata = json.loads(run_path.read_text())
+        if metadata.get("batch_mode") == "single_date" and metadata.get("source_report_dir") == "reports/tabpfn-daily":
+            files.update("data/processed/tabpfn/" + name for name in SINGLE_DATE_INPUTS)
+            for item in metadata.get("requests", []):
+                split, day = item.get("split"), item.get("date")
+                if split in {"validation", "test"} and isinstance(day, str) and len(day) == 10 and day[:4].isdigit() and day[4] == "-" and day[7] == "-" and day[5:7].isdigit() and day[8:].isdigit():
+                    files.add(f"reports/tabpfn-daily/batches/{split}-{day}.parquet")
+        if isinstance(metadata.get("query_protocol"), dict) and metadata["query_protocol"].get("name") == "fixed_shape_train_only_padding_v1" and metadata.get("source_report_dir") == "reports/tabpfn-padded":
+            files.update("data/processed/tabpfn/" + name for name in SINGLE_DATE_INPUTS)
+            files.update({"reports/tabpfn-padded/preflight.json", "reports/tabpfn-padded/batch_causality.json"})
+            for item in metadata.get("requests", []):
+                batch = item.get("batch", {})
+                split, start, stop = batch.get("split"), batch.get("start"), batch.get("stop")
+                if split in {"validation", "test", "pilot", "causality_combined", "causality_mutated"} and type(start) is int and type(stop) is int and 0 <= start < stop:
+                    base = f"reports/tabpfn-padded/batches/{split}-{start:06d}-{stop:06d}"
+                    files.update({base + ".parquet", base + ".json"})
+    return {relative: hashlib.sha256((root / relative).read_bytes()).hexdigest()
+            for relative in sorted(files) if (root / relative).is_file()}
 
 
 def load_external_candidate(
@@ -702,13 +726,18 @@ def load_external_candidate(
     status = json.loads(status_path.read_text()) if status_path.exists() else {}
     metadata = json.loads(run_path.read_text()) if run_path.exists() else {}
     if metadata.get("status") != "complete" or metadata.get("mode") != "full":
+        # An active full run supersedes the earlier pilot result, including a
+        # resumable quota pause. Neither status can supply test performance.
+        active = metadata if metadata.get("mode") == "full" else status
         result = {
-            "status": status.get("status", "incomplete"),
-            "reason": status.get("reason", "No complete, verified TabPFN test run is available."),
-            "context_rows": status.get("context_rows", metadata.get("context_rows")),
-            "model_path": status.get("model_path", metadata.get("model_path")),
-            "n_estimators": status.get("n_estimators", metadata.get("n_estimators")),
-            "performance_valid": False,
+            "status": active.get("status", "incomplete"),
+            "reason": active.get("reason", "No complete, verified TabPFN test run is available."),
+            "context_rows": active.get("context_rows", status.get("context_rows")),
+            "model_path": active.get("model_path", status.get("model_path")),
+            "n_estimators": active.get("n_estimators", status.get("n_estimators")),
+            "batch_mode": active.get("batch_mode"), "query_protocol": active.get("query_protocol"),
+            "completed_requests": active.get("completed_requests", 0),
+            "planned_requests": active.get("planned_requests"), "performance_valid": False,
         }
         # A status-only file cannot authorize a complete portfolio estimate.
         if result["status"] == "complete":
@@ -732,27 +761,37 @@ def load_external_candidate(
     require(pd.Timestamp(metadata.get("train_label_end")) <= pd.Timestamp("2022-12-30"), "training label crosses its boundary")
     require(metadata.get("test_labels_used") is False and metadata.get("blend_changed") is False, "test-label or blend policy violated")
     require(metadata.get("model_path") == "v3.5_default" and metadata.get("n_estimators") == 4, "model configuration mismatch")
+    candidate_config = metadata.get("model_config", {})
+    require(candidate_config.get("fit_mode") in {"fit_preprocessors", "fit_with_cache"}
+            and candidate_config == {"model_path": "v3.5_default", "n_estimators": 4, "random_state": 42,
+                                     "fit_mode": candidate_config.get("fit_mode")}, "unverified model configuration")
     require(metadata.get("context_rows") == context.get("train_rows") and int(metadata.get("context_rows", 0)) > 0, "context count mismatch")
     for relative, expected in context.get("prepared_alpha_sha256", {}).items():
         require(relative in {"data/processed/alpha_model_data.parquet", "data/processed/alpha_panel.parquet", "data/processed/alpha_data_manifest.json"}, "unexpected prepared artifact")
         path = root / relative
         require(path.exists() and hashlib.sha256(path.read_bytes()).hexdigest() == expected, "prepared artifact changed")
     require(len(context.get("prepared_alpha_sha256", {})) == 3, "missing prepared checksums")
-    proof_path = root / "reports/tabpfn/batch_causality.json"
-    require(proof_path.exists(), "missing batch-independence proof")
-    require(hashlib.sha256(proof_path.read_bytes()).hexdigest() == metadata.get("batch_independence_proof_sha256"), "proof checksum mismatch")
-    proof = json.loads(proof_path.read_text())
-    require(proof == metadata.get("batch_independence_proof"), "proof metadata mismatch")
-    require(proof.get("status") == "passed" and proof.get("ranking_identical") is True, "batch-independence diagnostic failed")
-    require(proof.get("input_fingerprint") == metadata.get("input_fingerprint"), "proof uses a different input context")
-    require(proof.get("fitted_train_set_id") == metadata.get("fitted_train_set_id"), "proof uses a different provider fit")
-    require(proof.get("feature_names") == list(feature_names) and proof.get("model_config") == metadata.get("model_config"), "proof uses a different schema or model")
-    try:
-        tolerance = float(proof["tolerance"])
-        differences = [float(proof[key]) for key in ["max_abs_date_alone", "max_abs_future_mutation"]]
-        require(0 <= tolerance <= 1e-6 and all(np.isfinite(value) and 0 <= value <= tolerance for value in differences), "proof tolerance or differences invalid")
-    except (KeyError, TypeError, ValueError) as error:
-        raise ValueError("Invalid external TabPFN candidate: malformed numeric proof") from error
+    single_date = metadata.get("batch_mode") == "single_date"
+    if single_date:
+        require(metadata.get("query_protocol") == "single_date_query", "unknown single-date query protocol")
+    else:
+        require(metadata.get("batch_mode") in {None, "multi_date"}, "unknown batch mode")
+        proof_path = root / "reports/tabpfn/batch_causality.json"
+        require(proof_path.exists(), "missing batch-independence proof")
+        require(hashlib.sha256(proof_path.read_bytes()).hexdigest() == metadata.get("batch_independence_proof_sha256"), "proof checksum mismatch")
+        proof = json.loads(proof_path.read_text())
+        require(proof == metadata.get("batch_independence_proof"), "proof metadata mismatch")
+        require(proof.get("status") == "passed" and proof.get("ranking_identical") is True, "batch-independence diagnostic failed")
+        require(proof.get("input_fingerprint") == metadata.get("input_fingerprint"), "proof uses a different input context")
+        require(proof.get("fitted_train_set_id") == metadata.get("fitted_train_set_id"), "proof uses a different provider fit")
+        require(proof.get("feature_names") == list(feature_names) and proof.get("model_config") == metadata.get("model_config"), "proof uses a different schema or model")
+        require(proof.get("query_protocol") == metadata.get("query_protocol"), "proof uses a different query protocol")
+        try:
+            tolerance = float(proof["tolerance"])
+            differences = [float(proof[key]) for key in ["max_abs_date_alone", "max_abs_future_mutation"]]
+            require(0 <= tolerance <= 1e-6 and all(np.isfinite(value) and 0 <= value <= tolerance for value in differences), "proof tolerance or differences invalid")
+        except (KeyError, TypeError, ValueError) as error:
+            raise ValueError("Invalid external TabPFN candidate: malformed numeric proof") from error
     hashes = metadata.get("output_sha256", {})
     for name in ["test_predictions.parquet", "validation_predictions.parquet"]:
         path = root / "reports/tabpfn" / name
@@ -769,11 +808,286 @@ def load_external_candidate(
     require(not keys.duplicated(["Date", "Ticker"]).any(), "duplicate expected test keys")
     coverage = keys.merge(forecast, on=["Date", "Ticker"], how="outer", indicator=True, validate="one_to_one")
     require(len(coverage) == len(keys) and coverage["_merge"].eq("both").all(), "incomplete or extra test coverage")
+    if single_date:
+        validate_single_date_requests(root, metadata, feature_names=list(feature_names), forecast=forecast)
+    elif isinstance(metadata.get("query_protocol"), dict):
+        validate_padded_requests(root, metadata, feature_names=list(feature_names), forecast=forecast)
+    elif metadata.get("query_protocol") not in {None, "multi_date_query"}:
+        raise ValueError("Invalid external TabPFN candidate: unknown query protocol")
     return {
         "status": "complete", "context_rows": metadata["context_rows"],
         "model_path": metadata["model_path"], "n_estimators": metadata["n_estimators"],
         "alpha_data_sha256": metadata["alpha_data_sha256"], "raw_snapshot_sha256": metadata["raw_snapshot_sha256"],
         "input_fingerprint": metadata["input_fingerprint"], "train_end": metadata["train_end"],
         "train_label_end": metadata["train_label_end"], "performance_valid": True,
-        "blend_inclusion": False,
+        "blend_inclusion": False, "batch_mode": metadata.get("batch_mode", "multi_date"),
+        "query_protocol": metadata.get("query_protocol", "multi_date_query"),
+        "fit_mode": metadata.get("model_config", {}).get("fit_mode"),
+        "completed_requests": len(metadata.get("requests", [])),
     }, forecast.rename(columns={"prediction": EXTERNAL_CANDIDATE})
+
+
+SINGLE_DATE_INPUTS = (
+    "manifest.json", "train_features.parquet", "train_labels.npy", "train_keys.parquet",
+    "validation_features.parquet", "validation_keys.parquet", "test_features.parquet", "test_keys.parquet",
+)
+
+
+def parquet_digest(frame: pd.DataFrame) -> str:
+    """Match the adapter's exact target-free upload bytes, without calling it."""
+    output = io.BytesIO()
+    frame.to_parquet(output, index=False, compression="zstd")
+    return hashlib.sha256(output.getvalue()).hexdigest()
+
+
+def canonical_digest(value: Any) -> str:
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
+
+
+def validate_single_date_requests(root: Path, metadata: dict, *, feature_names: list[str], forecast: pd.DataFrame) -> None:
+    """Prove saved full coverage used one date per query and a frozen train fit.
+
+    A failed multi-date equivalence diagnostic remains failed. Date isolation
+    supplies a different causal contract: no later query rows reach a forecast.
+    """
+    def require(condition: bool, message: str) -> None:
+        if not condition:
+            raise ValueError("Invalid external TabPFN single-date candidate: " + message)
+
+    config = metadata.get("model_config", {})
+    require(config == {"model_path": "v3.5_default", "n_estimators": 4, "random_state": 42,
+                       "fit_mode": config.get("fit_mode")}, "model config differs from the fixed candidate")
+    require(config.get("fit_mode") in {"fit_preprocessors", "fit_with_cache"}, "unverified fit mode")
+    expected_run = canonical_digest({"input_fingerprint": metadata.get("input_fingerprint"), "model_config": config,
+                                     "query_protocol": "single_date_query"})
+    require(metadata.get("run_fingerprint") == expected_run, "run fingerprint mismatch")
+    require(metadata.get("source_report_dir") == "reports/tabpfn-daily", "unexpected source report directory")
+    context = metadata["training_context"]
+    prepared = root / "data/processed/tabpfn"
+    saved_manifest = json.loads((prepared / "manifest.json").read_text())
+    require(saved_manifest == context, "training context manifest changed")
+    input_hashes = {}
+    for name in SINGLE_DATE_INPUTS:
+        if name == "manifest.json":
+            continue
+        path = prepared / name
+        require(path.is_file(), "missing prepared input " + name)
+        actual = hashlib.sha256(path.read_bytes()).hexdigest()
+        require(actual == context.get("sha256", {}).get(name), "prepared input changed: " + name)
+        input_hashes[name] = actual
+    # The existing input fingerprint retains the standard fit selector; the
+    # separate run fingerprint records cache execution without altering data.
+    fingerprint_manifest = dict(context)
+    fingerprint_manifest["sha256"] = {name: value for name, value in context.get("sha256", {}).items() if name in input_hashes}
+    standard_config = {"model_path": "v3.5_default", "n_estimators": 4, "random_state": 42, "fit_mode": "fit_preprocessors"}
+    expected_input = canonical_digest({"manifest": fingerprint_manifest, "sha256": input_hashes, "model_config": standard_config})
+    require(metadata.get("input_fingerprint") == expected_input, "frozen input fingerprint mismatch")
+    train_keys = pd.read_parquet(prepared / "train_keys.parquet")
+    train_dates = pd.to_datetime(train_keys["Date"], errors="coerce")
+    require(len(train_keys) == metadata["context_rows"] and train_dates.notna().all()
+            and train_dates.le(pd.Timestamp(metadata["train_end"])).all()
+            and not train_keys.duplicated(["Date", "Ticker"]).any(), "training keys cross the fixed boundary")
+    requests = metadata.get("requests")
+    require(isinstance(requests, list) and bool(requests), "missing completed date requests")
+    seen = set()
+    split_inputs = {}
+    aggregates = {"test": forecast}
+    for split in ["validation", "test"]:
+        keys = pd.read_parquet(prepared / f"{split}_keys.parquet").reset_index(drop=True)
+        require(list(keys.columns) == ["Date", "Ticker"] and not keys.duplicated(["Date", "Ticker"]).any(), "invalid prepared keys")
+        keys["Date"] = pd.to_datetime(keys["Date"], errors="coerce", utc=True).dt.tz_localize(None).dt.normalize()
+        keys["Ticker"] = keys["Ticker"].astype(str)
+        first, last = ("2023-01-01", "2023-12-31") if split == "validation" else ("2024-01-01", "2025-12-31")
+        require(keys["Date"].notna().all() and keys["Date"].between(first, last).all(), "prepared split date boundary violation")
+        require(keys.equals(keys.sort_values(["Date", "Ticker"]).reset_index(drop=True)), "unsorted prepared keys")
+        features = pd.read_parquet(prepared / f"{split}_features.parquet").reset_index(drop=True)
+        require(list(features.columns) == feature_names and len(features) == len(keys)
+                and np.isfinite(features.to_numpy(dtype=float)).all(), "prepared split feature mismatch")
+        split_inputs[split] = (keys, features)
+        if split == "validation":
+            aggregates[split] = pd.read_parquet(root / "reports/tabpfn/validation_predictions.parquet")
+        aggregate = aggregates[split]
+        require(list(aggregate.columns) == ["Date", "Ticker", "prediction"], "aggregate forecast schema mismatch")
+        require(aggregate[["Date", "Ticker"]].reset_index(drop=True).equals(keys)
+                and np.isfinite(aggregate["prediction"]).all(), "aggregate split coverage mismatch")
+    expected_dates = {(split, day.strftime("%Y-%m-%d")) for split, (keys, _) in split_inputs.items() for day in keys["Date"].drop_duplicates()}
+    for item in requests:
+        split, day = item.get("split"), item.get("date")
+        require((split, day) in expected_dates and (split, day) not in seen, "duplicate or unexpected date request")
+        seen.add((split, day))
+        require(item.get("status") == "completed", "request did not complete")
+        require(item.get("input_fingerprint") == metadata["input_fingerprint"] and item.get("run_fingerprint") == expected_run
+                and item.get("fitted_train_set_id") == metadata.get("fitted_train_set_id")
+                and item.get("model_config") == config, "request uses different data, fit or settings")
+        keys, features = split_inputs[split]
+        mask = keys["Date"].eq(pd.Timestamp(day))
+        indices = np.flatnonzero(mask.to_numpy())
+        selected_keys = keys.loc[mask].reset_index(drop=True)
+        selected_features = features.loc[mask].reset_index(drop=True)
+        require(item.get("first_date") == day and item.get("last_date") == day and item.get("rows") == len(selected_keys), "multi-date or partial-date request")
+        batch = item.get("batch", {})
+        require(batch == {"split": split, "start": int(indices[0]), "stop": int(indices[-1]) + 1,
+                          "first_date": day, "last_date": day, "rows": len(selected_keys)}, "batch slice does not match its sole date")
+        require(item.get("query_keys_sha256") == parquet_digest(selected_keys)
+                and item.get("query_features_sha256") == parquet_digest(selected_features), "query contains different keys or future features")
+        relative = f"batches/{split}-{day}.parquet"
+        require(item.get("output_relative_path") == relative, "unsafe or wrong batch output path")
+        path = root / metadata["source_report_dir"] / relative
+        require(path.is_file() and hashlib.sha256(path.read_bytes()).hexdigest() == item.get("predictions_sha256"), "batch forecast checksum mismatch")
+        batch_forecast = pd.read_parquet(path)
+        require(list(batch_forecast.columns) == ["Date", "Ticker", "prediction"]
+                and batch_forecast[["Date", "Ticker"]].equals(selected_keys)
+                and np.isfinite(batch_forecast["prediction"]).all(), "batch forecast keys or values invalid")
+        expected_values = aggregates[split].loc[mask, "prediction"].to_numpy()
+        require(np.array_equal(batch_forecast["prediction"].to_numpy(), expected_values), "aggregate differs from its completed request")
+    require(seen == expected_dates, "incomplete validation or test date coverage")
+
+
+PADDED_QUERY_PROTOCOL = {
+    "name": "fixed_shape_train_only_padding_v1", "query_rows": 10000,
+    "dtype": "float32", "padding_value": 0.0, "padding_placement": "tail",
+    "feature_transform_timing": "complete real date cross-sections before packing",
+    "ordering": "Date,Ticker", "discard_dummy_outputs": True,
+    "block_policy": "greedy chronological whole dates; start depends only on past/current row counts",
+}
+
+
+def load_padded_frozen_inputs(root: Path, context: dict, feature_names: list[str]) -> tuple[str, dict]:
+    """Load target-free query inputs and reconstruct their recorded fingerprint."""
+    def require(condition: bool, message: str) -> None:
+        if not condition:
+            raise ValueError("Invalid external TabPFN padded candidate: " + message)
+    prepared = root / "data/processed/tabpfn"
+    require(json.loads((prepared / "manifest.json").read_text()) == context, "context manifest changed")
+    hashes = {}
+    for name in SINGLE_DATE_INPUTS:
+        if name == "manifest.json":
+            continue
+        path = prepared / name
+        require(path.is_file(), "missing prepared input " + name)
+        hashes[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+        require(hashes[name] == context.get("sha256", {}).get(name), "prepared input changed: " + name)
+    fingerprint_manifest = dict(context)
+    fingerprint_manifest["sha256"] = {name: value for name, value in context.get("sha256", {}).items() if name in hashes}
+    standard_config = {"model_path": "v3.5_default", "n_estimators": 4, "random_state": 42, "fit_mode": "fit_preprocessors"}
+    fingerprint = canonical_digest({"manifest": fingerprint_manifest, "sha256": hashes, "model_config": standard_config})
+    train_keys = pd.read_parquet(prepared / "train_keys.parquet")
+    train_dates = pd.to_datetime(train_keys["Date"], errors="coerce")
+    require(len(train_keys) == context["train_rows"] and train_dates.notna().all()
+            and train_dates.le(pd.Timestamp(context["train_end"])).all()
+            and not train_keys.duplicated(["Date", "Ticker"]).any(), "training key boundary violation")
+    inputs = {}
+    for split in ["validation", "test"]:
+        keys = pd.read_parquet(prepared / f"{split}_keys.parquet").reset_index(drop=True)
+        require(list(keys.columns) == ["Date", "Ticker"] and not keys.duplicated(["Date", "Ticker"]).any(), "invalid prepared keys")
+        keys["Date"] = pd.to_datetime(keys["Date"], errors="coerce", utc=True).dt.tz_localize(None).dt.normalize()
+        keys["Ticker"] = keys["Ticker"].astype(str)
+        first, last = ("2023-01-01", "2023-12-31") if split == "validation" else ("2024-01-01", "2025-12-31")
+        require(not keys.empty and keys["Date"].notna().all() and keys["Date"].between(first, last).all()
+                and keys.equals(keys.sort_values(["Date", "Ticker"]).reset_index(drop=True)), "prepared split key boundary/order violation")
+        features = pd.read_parquet(prepared / f"{split}_features.parquet").reset_index(drop=True)
+        require(list(features.columns) == feature_names and len(features) == len(keys)
+                and np.isfinite(features.to_numpy(dtype=float)).all(), "prepared feature schema or values mismatch")
+        inputs[split] = (keys, features)
+    return fingerprint, inputs
+
+
+def padded_batch_plan(keys: pd.DataFrame, split: str) -> list[dict]:
+    """Reproduce the fixed chronological whole-date packing policy."""
+    groups = [(int(offsets.min()), int(offsets.max()) + 1) for offsets in keys.groupby("Date", sort=False).indices.values()]
+    batches = []
+    start, stop = groups[0][0], groups[0][0]
+    for begin, end in groups:
+        if end - begin > 10000:
+            raise ValueError("Invalid external TabPFN padded candidate: date cross-section exceeds fixed shape")
+        if end - start > 10000:
+            batches.append({"split": split, "start": start, "stop": stop, "rows": stop - start,
+                            "first_date": str(keys.iloc[start]["Date"].date()), "last_date": str(keys.iloc[stop - 1]["Date"].date())})
+            start = begin
+        stop = end
+    batches.append({"split": split, "start": start, "stop": stop, "rows": stop - start,
+                    "first_date": str(keys.iloc[start]["Date"].date()), "last_date": str(keys.iloc[stop - 1]["Date"].date())})
+    return batches
+
+
+def validate_padded_requests(root: Path, metadata: dict, *, feature_names: list[str], forecast: pd.DataFrame) -> None:
+    """Accept only the preregistered fixed shape that passed its own causal gate."""
+    def require(condition: bool, message: str) -> None:
+        if not condition:
+            raise ValueError("Invalid external TabPFN padded candidate: " + message)
+    protocol = metadata.get("query_protocol")
+    require(protocol == PADDED_QUERY_PROTOCOL, "fixed query protocol changed")
+    require(metadata.get("source_report_dir") == "reports/tabpfn-padded", "unexpected source report directory")
+    require(metadata["model_config"]["fit_mode"] == "fit_with_cache", "fixed protocol requires its cached fit")
+    proof = metadata["batch_independence_proof"]
+    require(proof.get("query_protocol") == protocol and proof.get("query_rows_constant") == 10000,
+            "proof is not bound to the exact fixed query shape")
+    prepared_fingerprint, inputs = load_padded_frozen_inputs(root, metadata["training_context"], feature_names)
+    expected_fingerprint = canonical_digest({"prepared_fingerprint": prepared_fingerprint, "model_config": metadata["model_config"], "query_protocol": protocol})
+    require(metadata.get("input_fingerprint") == expected_fingerprint, "input/config/protocol fingerprint mismatch")
+    require(proof.get("input_sha256") == {name: value for name, value in metadata["training_context"]["sha256"].items() if name in SINGLE_DATE_INPUTS and name != "manifest.json"}, "proof source inputs mismatch")
+    source = root / metadata["source_report_dir"]
+    source_proof = source / "batch_causality.json"
+    require(source_proof.is_file() and hashlib.sha256(source_proof.read_bytes()).hexdigest() == metadata["batch_independence_proof_sha256"], "source proof checksum mismatch")
+    preflight_path = source / "preflight.json"
+    require(preflight_path.is_file(), "missing pre-inference protocol record")
+    preflight = json.loads(preflight_path.read_text())
+    require(preflight.get("query_protocol") == protocol and preflight.get("model_config") == metadata["model_config"]
+            and preflight.get("input_fingerprint") == expected_fingerprint, "preregistered protocol/data/model mismatch")
+    registered_at = pd.to_datetime(preflight.get("generated_at"), utc=True, errors="coerce")
+    require(pd.notna(registered_at), "invalid protocol registration timestamp")
+    requests = metadata.get("requests")
+    require(isinstance(requests, list) and bool(requests), "missing completed query journal")
+    aggregates = {"test": forecast, "validation": pd.read_parquet(root / "reports/tabpfn/validation_predictions.parquet")}
+    expected = {}
+    for split, (keys, _) in inputs.items():
+        aggregate = aggregates[split]
+        require(list(aggregate.columns) == ["Date", "Ticker", "prediction"] and aggregate[["Date", "Ticker"]].reset_index(drop=True).equals(keys)
+                and np.isfinite(aggregate["prediction"]).all(), "aggregate split coverage mismatch")
+        for batch in padded_batch_plan(keys, split):
+            expected[canonical_digest(batch)] = batch
+    require(preflight.get("full_batches") == list(expected.values()), "recorded full-batch plan changed")
+    normal = [item for item in requests if item.get("batch", {}).get("split") in {"validation", "test"}]
+    seen = set()
+    for item in normal:
+        batch = item.get("batch", {})
+        identifier = canonical_digest(batch)
+        require(identifier in expected and identifier not in seen and item.get("batch_id") == identifier,
+                "duplicate, unexpected or partial-date query batch")
+        seen.add(identifier)
+        require(item.get("status") == "completed" and item.get("fitted_train_set_id") == metadata.get("fitted_train_set_id"), "query incomplete or uses another fit")
+        require(item.get("query_protocol") == protocol and item.get("query_rows") == 10000 and item.get("real_rows") == batch["rows"], "query shape or real-row count changed")
+        started_at = pd.to_datetime(item.get("started_at"), utc=True, errors="coerce")
+        require(pd.notna(started_at) and started_at >= registered_at, "query predates its recorded protocol")
+        keys, features = inputs[batch["split"]]
+        selected = features.iloc[batch["start"]:batch["stop"]].reset_index(drop=True).astype(np.float32)
+        zeros = pd.DataFrame(np.zeros((10000 - len(selected), len(feature_names)), dtype=np.float32), columns=feature_names)
+        padded = pd.concat([selected, zeros], ignore_index=True)
+        uploaded = canonical_digest({"parquet_sha256": parquet_digest(padded), "columns": feature_names, "rows": 10000})
+        require(item.get("uploaded_query_sha256") == uploaded, "uploaded matrix differs from frozen features/zero padding")
+        stem = f"{batch['split']}-{batch['start']:06d}-{batch['stop']:06d}"
+        prediction_path, response_path = source / "batches" / (stem + ".parquet"), source / "batches" / (stem + ".json")
+        require(prediction_path.is_file() and hashlib.sha256(prediction_path.read_bytes()).hexdigest() == item.get("predictions_sha256"), "batch forecast checksum mismatch")
+        require(response_path.is_file() and hashlib.sha256(response_path.read_bytes()).hexdigest() == item.get("response_metadata_sha256"), "batch response checksum mismatch")
+        response = json.loads(response_path.read_text())
+        require(response.get("batch") == batch and response.get("query_protocol") == protocol and response.get("input_fingerprint") == expected_fingerprint
+                and response.get("query_rows") == 10000 and response.get("real_rows") == batch["rows"] and response.get("uploaded_query_sha256") == uploaded,
+                "batch response provenance mismatch")
+        provider = response.get("provider_metadata", {})
+        require(provider.get("test_set_num_rows") == 10000 and provider.get("test_set_num_cols") == len(feature_names)
+                and provider.get("n_estimators") == 4 and provider.get("billing_model_version") == "v3.5" and provider.get("task") == "regression",
+                "provider query shape/model/task mismatch")
+        selected_keys = keys.iloc[batch["start"]:batch["stop"]].reset_index(drop=True)
+        piece = pd.read_parquet(prediction_path)
+        require(list(piece.columns) == ["Date", "Ticker", "prediction"] and piece[["Date", "Ticker"]].equals(selected_keys)
+                and np.isfinite(piece["prediction"]).all(), "batch predictions do not cover the real keys")
+        expected_values = aggregates[batch["split"]].iloc[batch["start"]:batch["stop"]]["prediction"].to_numpy()
+        require(np.array_equal(piece["prediction"].to_numpy(), expected_values), "aggregate differs from its saved batch predictions")
+    require(seen == set(expected), "incomplete validation/test batch coverage")
+    diagnostics = [item for item in requests if item not in normal]
+    diagnostic_splits = [item.get("batch", {}).get("split") for item in diagnostics]
+    require(sorted(diagnostic_splits) == ["causality_combined", "causality_mutated", "pilot"], "missing or unexpected diagnostic queries")
+    for item in diagnostics:
+        require(item.get("status") == "completed" and item.get("fitted_train_set_id") == metadata.get("fitted_train_set_id")
+                and item.get("query_protocol") == protocol and item.get("query_rows") == 10000,
+                "diagnostic query uses another fit/protocol/shape or did not complete")

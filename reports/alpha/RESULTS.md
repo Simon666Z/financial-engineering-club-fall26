@@ -1,6 +1,6 @@
 # Long-only model comparison
 
-The validation-selected four-model blend turns $1 million into **$1,709,546.02** in 2024–2025: **+70.95%**, annualized Sharpe **1.835**, and maximum drawdown **-8.79%**, with costs excluded. Every saved model is evaluated separately using identical prices, eligible stocks and trading rules. The model and forecast table remain frozen; this run changes execution only.
+The validation-selected four-model blend turns $1 million into **$1,709,546.02** in 2024–2025: **+70.95%**, annualized Sharpe **1.835**, and maximum drawdown **-8.79%**, with costs excluded. Every saved model is evaluated separately using identical prices, eligible stocks and trading rules. The original core models and forecast table remain frozen. The completed TabPFN candidate adds a separate comparison using the same data and execution rules.
 
 ## Trading scheme
 
@@ -20,9 +20,11 @@ Exit proceeds become available at that execution day's close for the next sessio
 | Reversal baseline | +50.19% | 1.526 | -8.13% | $1,501,903.34 | resolved |
 | Momentum baseline | +181.68% | 1.898 | -26.67% | $2,816,810.27 | resolved |
 | Original-feature baseline | +39.94% | 1.435 | -10.31% | $1,399,355.12 | resolved |
-| TabPFN-3.5 | — | — | — | — | pilot only |
+| TabPFN-3.5 | +252.51% | 1.392 | -39.40% | $3,525,086.84 | resolved |
 
-The four-model blend was selected on 2023 ranking accuracy and remains 25% each ElasticNet, XGBoost regression, XGBoost Ranker and CatBoost. The test comparison does not change those weights. The momentum baseline's observed return exceeds the learned models; profit alone does not establish that model complexity added value. Long-only profits include broad equity exposure and are not a market-neutral alpha estimate.
+The four-model blend was selected on 2023 ranking accuracy and remains 25% each ElasticNet, XGBoost regression, XGBoost Ranker and CatBoost. The test comparison does not change those weights. The momentum baseline's observed return exceeds every original local model; profit alone does not establish that model complexity added value. Long-only profits include broad equity exposure and are not a market-neutral alpha estimate.
+
+TabPFN has the highest cumulative return but a larger drawdown and lower Sharpe than the blend. This does not make it the best strategy for every risk objective.
 
 The original-feature baseline is the saved original model applied to the same expanded eligible test stocks. It has a different training history. All available resolved model curves are shown separately in the dashboard and `model_daily.csv`; the blend is highlighted. A missing or invalid model remains in the table with its status and no invented portfolio performance.
 
@@ -43,4 +45,4 @@ The data's current-at-download membership has survivorship and membership bias. 
 .venv/bin/python scripts/run_showcase.py --feature-set alpha --rebacktest
 ```
 
-The first command checks hashes and reuses the complete run. The second replays execution using the same saved forecasts. Open [the dashboard](index.html), [the notebook](../../notebooks/SimonResearch_Showcase.ipynb), `summary.json`, `leaderboard.csv` and `model_daily.csv`. TabPFN-3.5 successfully returned a 490-stock validation-date pilot. Its predeclared batch-independence diagnostic failed, so it is shown as pilot only with blank full-period performance. Three queries consumed 30,000 API tokens. The frozen blend is unchanged. [Pilot evidence and budget](../../docs/tabpfn.md).
+The first command checks hashes and reuses the complete run. The second replays execution using the same saved forecasts. Open [the dashboard](index.html), [the notebook](../../notebooks/SimonResearch_Showcase.ipynb), `summary.json`, `leaderboard.csv` and `model_daily.csv`. TabPFN-3.5 completed all 122,255 validation and 248,377 test forecasts using a fixed 10,000-row query protocol that passed the original causal gate. It produces +252.51% cumulative return with a 39.40% maximum drawdown and 1.392 Sharpe. Its context uses 20,000 training rows, compared with 712,313 labeled rows for the core models. It remains outside the frozen blend. Full inference consumed 390,000 tokens; all diagnostics and inference together consumed 480,000. [Protocol, evidence and budget](../../docs/tabpfn.md).
