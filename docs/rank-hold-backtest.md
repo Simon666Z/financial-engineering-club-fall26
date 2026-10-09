@@ -1,6 +1,6 @@
 # Persistent long/short backtest
 
-This exploratory simulation changes the trading rules while reusing the saved notebook data, fitted model, and complete prediction table. It does not train a new model.
+This backtester applies the same persistent holding rules to any saved model forecast table. Execution-only runs reuse fitted models and predictions. The current [expanded-feature experiment](../reports/alpha/RESULTS.md) retrains the model separately, while preserving these trading rules and the original data snapshot.
 
 ## The daily sequence
 
@@ -56,7 +56,7 @@ The universe is the Wikipedia constituent snapshot, not historical S&P 500 membe
 From the research checkout, run:
 
 ```bash
-.venv/bin/python scripts/run_showcase.py --rebacktest
+.venv/bin/python scripts/run_showcase.py --feature-set alpha --rebacktest
 ```
 
-This reuses frozen forecasts and recomputes execution. Settings are in [config/rank_hold.json](../config/rank_hold.json); `--retrain` and `--refresh-data` are separate explicit actions. The [research notebook](../notebooks/SimonResearch_Showcase.ipynb) presents the experiment. Inspect the dashboard and audit outputs in `reports/showcase/`, including the summary, daily equity, trades and held positions. The first intraday experiment is preserved in `reports/showcase/archive/intraday-v1/`.
+This reuses frozen forecasts and recomputes execution. Settings are in [config/rank_hold.json](../config/rank_hold.json); `--retrain` and `--refresh-data` are separate explicit actions. The [research notebook](../notebooks/SimonResearch_Showcase.ipynb) presents the experiment. Inspect the current dashboard and audit outputs in `reports/alpha/`, including the summary, daily equity, trades and held positions. The first intraday experiment is preserved in `reports/showcase/archive/intraday-v1/`.

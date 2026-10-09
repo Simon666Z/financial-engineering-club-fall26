@@ -1,0 +1,428 @@
+{
+  "seed": 42,
+  "threads": 4,
+  "feature_names": [
+    "ret_1d",
+    "mom_5d",
+    "mom_20d",
+    "mom_60d",
+    "vol_5d",
+    "vol_20d",
+    "volume_ratio_20d",
+    "range_pct",
+    "intraday_ret",
+    "mom_126_21",
+    "mom_252_21",
+    "high_ratio_252",
+    "dollar_volume_rank_50",
+    "dollar_volume_log_shock_20",
+    "volume_reversal_1d",
+    "max_return_21d",
+    "max5_return_21d",
+    "overnight_ret_1d",
+    "overnight_mom_20d",
+    "intraday_mom_20d",
+    "overnight_mom_60d",
+    "intraday_mom_60d",
+    "overnight_intraday_spread_20d",
+    "overnight_intraday_spread_60d",
+    "ret_1d__csrank",
+    "mom_5d__csrank",
+    "mom_20d__csrank",
+    "mom_60d__csrank",
+    "vol_5d__csrank",
+    "vol_20d__csrank",
+    "volume_ratio_20d__csrank",
+    "range_pct__csrank",
+    "intraday_ret__csrank",
+    "mom_126_21__csrank",
+    "mom_252_21__csrank",
+    "high_ratio_252__csrank",
+    "dollar_volume_rank_50__csrank",
+    "dollar_volume_log_shock_20__csrank",
+    "volume_reversal_1d__csrank",
+    "max_return_21d__csrank",
+    "max5_return_21d__csrank",
+    "overnight_ret_1d__csrank",
+    "overnight_mom_20d__csrank",
+    "intraday_mom_20d__csrank",
+    "overnight_mom_60d__csrank",
+    "intraday_mom_60d__csrank",
+    "overnight_intraday_spread_20d__csrank",
+    "overnight_intraday_spread_60d__csrank"
+  ],
+  "input_features": [
+    "ret_1d",
+    "mom_5d",
+    "mom_20d",
+    "mom_60d",
+    "vol_5d",
+    "vol_20d",
+    "volume_ratio_20d",
+    "range_pct",
+    "intraday_ret",
+    "mom_126_21",
+    "mom_252_21",
+    "high_ratio_252",
+    "dollar_volume_rank_50",
+    "dollar_volume_log_shock_20",
+    "volume_reversal_1d",
+    "max_return_21d",
+    "max5_return_21d",
+    "overnight_ret_1d",
+    "overnight_mom_20d",
+    "intraday_mom_20d",
+    "overnight_mom_60d",
+    "intraday_mom_60d",
+    "overnight_intraday_spread_20d",
+    "overnight_intraday_spread_60d"
+  ],
+  "feature_schema_version": 2,
+  "original_features": [
+    "ret_1d",
+    "mom_5d",
+    "mom_20d",
+    "mom_60d",
+    "vol_5d",
+    "vol_20d",
+    "volume_ratio_20d",
+    "range_pct",
+    "intraday_ret"
+  ],
+  "added_features": [
+    "mom_126_21",
+    "mom_252_21",
+    "high_ratio_252",
+    "dollar_volume_rank_50",
+    "dollar_volume_log_shock_20",
+    "volume_reversal_1d",
+    "max_return_21d",
+    "max5_return_21d",
+    "overnight_ret_1d",
+    "overnight_mom_20d",
+    "intraday_mom_20d",
+    "overnight_mom_60d",
+    "intraday_mom_60d",
+    "overnight_intraday_spread_20d",
+    "overnight_intraday_spread_60d"
+  ],
+  "excluded_predictors": [
+    "Date",
+    "GICS Sector",
+    "GICS Sub-Industry",
+    "LabelEndDate",
+    "QuoteValid",
+    "Sector",
+    "SignalEligible",
+    "Split",
+    "Ticker",
+    "target",
+    "target_rank"
+  ],
+  "candidate_params": {
+    "elastic_net": {
+      "alpha": 0.001,
+      "l1_ratio": 0.15,
+      "max_iter": 3000,
+      "tol": 1e-05,
+      "selection": "cyclic"
+    },
+    "xgb_regression": {
+      "n_estimators": 500,
+      "learning_rate": 0.035,
+      "max_depth": 4,
+      "min_child_weight": 35,
+      "subsample": 0.8,
+      "colsample_bytree": 0.9,
+      "reg_lambda": 20.0,
+      "reg_alpha": 0.1,
+      "max_bin": 128,
+      "tree_method": "hist",
+      "device": "cpu",
+      "n_jobs": 4,
+      "random_state": 42,
+      "early_stopping_rounds": 60,
+      "objective": "reg:squarederror",
+      "eval_metric": "rmse"
+    },
+    "xgb_ranker": {
+      "n_estimators": 500,
+      "learning_rate": 0.035,
+      "max_depth": 4,
+      "min_child_weight": 35,
+      "subsample": 0.8,
+      "colsample_bytree": 0.9,
+      "reg_lambda": 20.0,
+      "reg_alpha": 0.1,
+      "max_bin": 128,
+      "tree_method": "hist",
+      "device": "cpu",
+      "n_jobs": 4,
+      "random_state": 42,
+      "early_stopping_rounds": 60,
+      "objective": "rank:ndcg",
+      "eval_metric": "ndcg@50",
+      "ndcg_exp_gain": false,
+      "lambdarank_pair_method": "mean",
+      "lambdarank_num_pair_per_sample": 8
+    },
+    "catboost": {
+      "iterations": 500,
+      "learning_rate": 0.035,
+      "depth": 6,
+      "l2_leaf_reg": 20.0,
+      "loss_function": "RMSE",
+      "eval_metric": "RMSE",
+      "random_seed": 42,
+      "thread_count": 4,
+      "allow_writing_files": false,
+      "verbose": false
+    }
+  },
+  "fitting_seconds": {
+    "elastic_net": 2.605701874999795,
+    "xgb_regression": 2.154152165981941,
+    "xgb_ranker": 6.016101749963127,
+    "catboost": 2.9725692499778233
+  },
+  "total_training_seconds": 14.785984709043987,
+  "train_rows": 712313,
+  "validation_rows": 122255,
+  "train_context_rows": 712325,
+  "validation_context_rows": 122255,
+  "unlabeled_context_rows": {
+    "train": 12,
+    "validation": 0
+  },
+  "train_dates": {
+    "start": "2017-01-03",
+    "end": "2022-12-29"
+  },
+  "validation_dates": {
+    "start": "2023-01-03",
+    "end": "2023-12-28"
+  },
+  "fit_cutoff": "2022-12-31",
+  "selection_cutoff": "2023-12-31",
+  "refit_on_validation": false,
+  "regression_target": "same-date centered percentile rank of next-day decimal return, in [-1, 1]",
+  "ranking_target": "same-date return decile relevance grade 0 through 9; equal returns stay tied",
+  "recency_weighting": "three-year half-life; equal aggregate weight for equally recent dates",
+  "validation_rank_ic": {
+    "elastic_net": {
+      "mean": 0.01793845671820065,
+      "scored_days": 249,
+      "undefined_days": 0,
+      "total_days": 249
+    },
+    "xgb_regression": {
+      "mean": 0.018043176214784563,
+      "scored_days": 249,
+      "undefined_days": 0,
+      "total_days": 249
+    },
+    "xgb_ranker": {
+      "mean": 0.017688068083708965,
+      "scored_days": 249,
+      "undefined_days": 0,
+      "total_days": 249
+    },
+    "catboost": {
+      "mean": 0.018558067343751615,
+      "scored_days": 249,
+      "undefined_days": 0,
+      "total_days": 249
+    }
+  },
+  "blend_trials": [
+    {
+      "weights": {
+        "elastic_net": 1.0
+      },
+      "validation_rank_ic": {
+        "mean": 0.01793845671820065,
+        "scored_days": 249,
+        "undefined_days": 0,
+        "total_days": 249
+      }
+    },
+    {
+      "weights": {
+        "xgb_regression": 1.0
+      },
+      "validation_rank_ic": {
+        "mean": 0.018043176214784563,
+        "scored_days": 249,
+        "undefined_days": 0,
+        "total_days": 249
+      }
+    },
+    {
+      "weights": {
+        "xgb_ranker": 1.0
+      },
+      "validation_rank_ic": {
+        "mean": 0.017688068083708965,
+        "scored_days": 249,
+        "undefined_days": 0,
+        "total_days": 249
+      }
+    },
+    {
+      "weights": {
+        "catboost": 1.0
+      },
+      "validation_rank_ic": {
+        "mean": 0.018558067343751615,
+        "scored_days": 249,
+        "undefined_days": 0,
+        "total_days": 249
+      }
+    },
+    {
+      "weights": {
+        "elastic_net": 0.25,
+        "xgb_regression": 0.25,
+        "xgb_ranker": 0.25,
+        "catboost": 0.25
+      },
+      "validation_rank_ic": {
+        "mean": 0.019281394241682473,
+        "scored_days": 249,
+        "undefined_days": 0,
+        "total_days": 249
+      }
+    },
+    {
+      "weights": {
+        "xgb_regression": 0.3333333333333333,
+        "xgb_ranker": 0.3333333333333333,
+        "catboost": 0.3333333333333333
+      },
+      "validation_rank_ic": {
+        "mean": 0.018744580785392508,
+        "scored_days": 249,
+        "undefined_days": 0,
+        "total_days": 249
+      }
+    },
+    {
+      "weights": {
+        "elastic_net": 0.5,
+        "xgb_regression": 0.5
+      },
+      "validation_rank_ic": {
+        "mean": 0.019184259595649324,
+        "scored_days": 249,
+        "undefined_days": 0,
+        "total_days": 249
+      }
+    },
+    {
+      "weights": {
+        "elastic_net": 0.5,
+        "xgb_ranker": 0.5
+      },
+      "validation_rank_ic": {
+        "mean": 0.01885853701560642,
+        "scored_days": 249,
+        "undefined_days": 0,
+        "total_days": 249
+      }
+    },
+    {
+      "weights": {
+        "elastic_net": 0.5,
+        "catboost": 0.5
+      },
+      "validation_rank_ic": {
+        "mean": 0.0192029356756187,
+        "scored_days": 249,
+        "undefined_days": 0,
+        "total_days": 249
+      }
+    },
+    {
+      "weights": {
+        "xgb_regression": 0.5,
+        "xgb_ranker": 0.5
+      },
+      "validation_rank_ic": {
+        "mean": 0.018447390970194225,
+        "scored_days": 249,
+        "undefined_days": 0,
+        "total_days": 249
+      }
+    },
+    {
+      "weights": {
+        "xgb_regression": 0.5,
+        "catboost": 0.5
+      },
+      "validation_rank_ic": {
+        "mean": 0.01861091534262266,
+        "scored_days": 249,
+        "undefined_days": 0,
+        "total_days": 249
+      }
+    },
+    {
+      "weights": {
+        "xgb_ranker": 0.5,
+        "catboost": 0.5
+      },
+      "validation_rank_ic": {
+        "mean": 0.018755239348809342,
+        "scored_days": 249,
+        "undefined_days": 0,
+        "total_days": 249
+      }
+    }
+  ],
+  "selected_weights": {
+    "elastic_net": 0.25,
+    "xgb_regression": 0.25,
+    "xgb_ranker": 0.25,
+    "catboost": 0.25
+  },
+  "ensemble_validation_rank_ic": {
+    "mean": 0.019281394241682473,
+    "scored_days": 249,
+    "undefined_days": 0,
+    "total_days": 249
+  },
+  "return_calibration": {
+    "intercept": 0.0008866093500637588,
+    "slope": 0.0,
+    "fit_period": "2023 validation only",
+    "output_unit": "decimal next-day return",
+    "positive_slope": false
+  },
+  "output_units": {
+    "elastic_net": "same-date centered percentile score in [-1, 1]",
+    "xgb_regression": "same-date centered percentile score in [-1, 1]",
+    "xgb_ranker": "same-date centered percentile score in [-1, 1]",
+    "catboost": "same-date centered percentile score in [-1, 1]",
+    "ensemble": "convex blend of daily percentile scores in [-1, 1]; not a return",
+    "ensemble_predicted_return": "validation-calibrated decimal next-day return estimate",
+    "reversal": "same-date centered percentile of minus ret_1d",
+    "momentum": "same-date centered percentile of mom_20d"
+  },
+  "best_iterations": {
+    "xgb_regression": 72,
+    "xgb_ranker": 39,
+    "catboost": 58
+  },
+  "test_labels_used": false,
+  "prediction_context": "Supply every eligible stock for a signal date; same-day ranks do not read labels or future dates.",
+  "training_context": "Feature percentiles and validation prediction percentiles use the full observable cross-section before selecting known targets.",
+  "limitations": [
+    "2023 is used for both early stopping and blend selection, so validation results are optimistic.",
+    "Return calibration is a rough affine mean estimate and has no guarantee of realized profit.",
+    "The final test period must be evaluated once and not used to revise this bundle."
+  ],
+  "dataset_sha256": "f23d08a9aa20a2672c7cc0e87df1a58ea181ca24350de4c29bce8d3f761deb3b",
+  "max_iterations": 500,
+  "feature_set": "alpha",
+  "frozen_at": "2026-10-08T20:48:54.162250-05:00"
+}

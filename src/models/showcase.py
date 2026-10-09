@@ -1,8 +1,9 @@
 """Small, fixed-budget stock-ranking ensemble for the daily starter data.
 
-The models only use the notebook's nine features and each feature's observable
-same-day percentile. Training ends in 2022. The 2023 validation set chooses the
-best iteration, blend, and return calibration. No test labels enter this module.
+Each bundle stores its raw input schema and adds each feature's observable
+same-day percentile. The default remains the notebook's original nine inputs.
+Training ends in 2022. The 2023 validation set chooses the best iteration,
+blend, and return calibration. No test labels enter this module.
 
 Scores rank stocks; they are not returns or probabilities. A separate affine
 calibration maps the ensemble score to a decimal next-day return estimate.
@@ -30,6 +31,35 @@ COMPONENTS = ("elastic_net", "xgb_regression", "xgb_ranker", "catboost")
 FEATURE_NAMES = list(FEATURES) + [f"{name}__csrank" for name in FEATURES]
 TRAIN_END = pd.Timestamp("2022-12-31")
 VALIDATION_END = pd.Timestamp("2023-12-31")
+EXCLUDED_PREDICTORS = {
+    "Date", "Ticker", "Sector", "GICS Sector", "GICS Sub-Industry", "target",
+    "target_rank", "LabelEndDate", "Split", "SignalEligible", "QuoteValid",
+}
+
+
+def _resolve_features(features=None):
+    """Copy and validate a model's ordered raw schema; never infer from columns."""
+    if features is None:
+        return list(FEATURES)
+    if isinstance(features, str):
+        raise ValueError("features must be an ordered sequence of raw column names.")
+    selected = list(features)
+    if not selected or any(not isinstance(name, str) or not name.strip() for name in selected):
+        raise ValueError("features must contain nonempty raw column names.")
+    if len(set(selected)) != len(selected):
+        raise ValueError("features must not contain duplicate columns.")
+    unsafe = [name for name in selected if name in EXCLUDED_PREDICTORS or name.startswith("target_")]
+    if unsafe:
+        raise ValueError(f"Identifiers, eligibility flags, and label fields are not predictors: {unsafe}")
+    if any(name.endswith("__csrank") for name in selected):
+        raise ValueError("The __csrank suffix is reserved for target-free daily transforms.")
+    return selected
+
+
+def transformed_feature_names(features=None):
+    """Names in the precise raw-then-percentile order used by all components."""
+    selected = _resolve_features(features)
+    return selected + [f"{name}__csrank" for name in selected]
 
 
 def _dates(values):
@@ -37,8 +67,9 @@ def _dates(values):
     return dates.dt.tz_localize(None).dt.normalize()
 
 
-def _check_frame(frame, *, labeled=False):
-    required = ["Date", "Ticker"] + FEATURES + (["target"] if labeled else [])
+def _check_frame(frame, *, labeled=False, features=None):
+    selected = _resolve_features(features)
+    required = ["Date", "Ticker"] + selected + (["target"] if labeled else [])
     missing = sorted(set(required) - set(frame.columns))
     if missing:
         raise ValueError(f"Model table is missing these columns: {missing}")
@@ -48,7 +79,7 @@ def _check_frame(frame, *, labeled=False):
         raise ValueError("Model rows need valid Date and Ticker keys.")
     if result.duplicated(["Date", "Ticker"]).any():
         raise ValueError("Model rows need one record per date and ticker.")
-    numeric = FEATURES + (["target"] if labeled else [])
+    numeric = selected + (["target"] if labeled else [])
     result[numeric] = result[numeric].apply(pd.to_numeric, errors="coerce")
     if not np.isfinite(result[numeric].to_numpy(dtype=float)).all():
         raise ValueError("Model features and training targets must be finite.")
@@ -64,21 +95,22 @@ def _daily_scores(values, dates):
     return ((ranks - 0.5) / counts - 0.5).to_numpy() * 2.0
 
 
-def make_features(frame):
-    """Use exactly nine raw features plus their target-free daily ranks.
+def make_features(frame, features=None):
+    """Use an explicit raw schema plus its target-free daily ranks.
 
     Supply the complete eligible cross-section for each date at inference, as
     changing the set of stocks changes a percentile's reference population.
     Adding a different date or changing labels cannot affect these features.
     """
-    clean = _check_frame(frame)
-    result = clean[FEATURES].astype(np.float32).copy()
-    for name in FEATURES:
+    selected = _resolve_features(features)
+    clean = _check_frame(frame, features=selected)
+    result = clean[selected].astype(np.float32).copy()
+    for name in selected:
         result[f"{name}__csrank"] = _daily_scores(clean[name], clean["Date"]).astype(np.float32)
-    return result[FEATURE_NAMES]
+    return result[transformed_feature_names(selected)]
 
 
-def make_rank_groups(frame, *, grades=10):
+def make_rank_groups(frame, *, grades=10, features=None):
     """Sort rows by date/ticker and build date-sized LambdaMART queries.
 
     Each integer relevance grade describes a within-day return decile. Label
@@ -86,7 +118,7 @@ def make_rank_groups(frame, *, grades=10):
     """
     if grades < 2 or grades > 32:
         raise ValueError("Use between 2 and 32 integer relevance grades.")
-    clean = _check_frame(frame, labeled=True).sort_values(["Date", "Ticker"]).reset_index(drop=True)
+    clean = _check_frame(frame, labeled=True, features=features).sort_values(["Date", "Ticker"]).reset_index(drop=True)
     ranks = clean.groupby("Date", sort=False)["target"].rank(method="average")
     counts = clean.groupby("Date", sort=False)["target"].transform("count")
     labels = np.floor(grades * (ranks - 0.5) / counts).clip(0, grades - 1).to_numpy(dtype=np.int32)
@@ -171,16 +203,29 @@ class ShowcaseBundle:
     weights: dict
     return_calibration: dict
     training_metadata: dict = field(default_factory=dict)
+    input_features: list = field(default_factory=lambda: list(FEATURES))
+
+    @property
+    def feature_names(self):
+        """The fitted schema, with a fallback for original nine-input pickles."""
+        return transformed_feature_names(getattr(self, "input_features", None))
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        # Original saved bundles have no input_features field. Keep their
+        # fitted dimensions rather than adopting a later global alpha schema.
+        self.__dict__.setdefault("input_features", list(FEATURES))
 
     def predict_all(self, frame):
         """Predict without reading any target, target_rank, or later-date field."""
-        clean = _check_frame(frame)
+        selected = _resolve_features(getattr(self, "input_features", None))
+        clean = _check_frame(frame, features=selected)
         result = clean[["Date", "Ticker"]].copy()
         if clean.empty:
             for name in COMPONENTS + ("ensemble", "ensemble_predicted_return", "reversal", "momentum"):
                 result[name] = pd.Series(dtype=float)
             return result
-        features = make_features(clean)
+        features = make_features(clean, features=selected)
         for name in COMPONENTS:
             raw = self.models[name].predict(features)
             result[name] = _daily_scores(raw, clean["Date"])
@@ -188,8 +233,10 @@ class ShowcaseBundle:
         result["ensemble_predicted_return"] = (
             self.return_calibration["intercept"] + self.return_calibration["slope"] * result["ensemble"]
         )
-        result["reversal"] = _daily_scores(-clean["ret_1d"], clean["Date"])
-        result["momentum"] = _daily_scores(clean["mom_20d"], clean["Date"])
+        # Baselines are convenient outputs, not implicit model predictors.
+        # A custom schema can omit their source columns entirely.
+        for name, source, sign in (("reversal", "ret_1d", -1), ("momentum", "mom_20d", 1)):
+            result[name] = _daily_scores(sign * pd.to_numeric(clean[source], errors="coerce"), clean["Date"]) if source in clean else np.nan
         return result
 
     def save(self, path):
@@ -237,20 +284,20 @@ def _check_chronology(train, validation):
             # they have no supervised label that could cross the cutoff.
             labeled = frame.loc[frame["target"].notna()]
             ends = _dates(labeled["LabelEndDate"])
-            if ends.isna().any() or ends.gt(cutoff).any():
-                raise ValueError(f"Purge {name} rows whose return label crosses the period cutoff.")
+            if ends.isna().any() or ends.le(labeled["Date"]).any() or ends.gt(cutoff).any():
+                raise ValueError(f"Purge {name} rows whose return label is not a later date within the period cutoff.")
 
 
-def _training_context(frame):
+def _training_context(frame, *, features=None):
     """Retain all observable stocks before selecting known supervised labels."""
-    clean = _check_frame(frame)
+    clean = _check_frame(frame, features=features)
     if "target" not in clean:
         raise ValueError("Training and validation context both need a target column.")
     clean["target"] = pd.to_numeric(clean["target"], errors="coerce").replace([np.inf, -np.inf], np.nan)
     return clean.sort_values(["Date", "Ticker"]).reset_index(drop=True)
 
 
-def train_showcase(train, validation, seed=42, threads=4, max_iterations=500):
+def train_showcase(train, validation, seed=42, threads=4, max_iterations=500, input_features=None):
     """Fit four models once, then choose and calibrate using validation only.
 
     Regressors predict continuous centered daily return ranks to reduce the
@@ -260,17 +307,19 @@ def train_showcase(train, validation, seed=42, threads=4, max_iterations=500):
     """
     if threads < 1 or max_iterations < 1:
         raise ValueError("threads and max_iterations must both be positive.")
-    train_context, validation_context = _training_context(train), _training_context(validation)
+    selected_features = _resolve_features(input_features)
+    train_context = _training_context(train, features=selected_features)
+    validation_context = _training_context(validation, features=selected_features)
     _check_chronology(train_context, validation_context)
     train_known, validation_known = train_context["target"].notna(), validation_context["target"].notna()
     if not train_known.any() or not validation_known.any():
         raise ValueError("Training and validation both need some known supervised targets.")
     # Rank predictors before removing stocks whose future return is missing.
     # Which returns eventually become available cannot change today's input.
-    x_train = make_features(train_context).loc[train_known].reset_index(drop=True)
-    x_validation = make_features(validation_context).loc[validation_known].reset_index(drop=True)
-    train, rank_labels, groups = make_rank_groups(train_context.loc[train_known])
-    validation, validation_grades, validation_groups = make_rank_groups(validation_context.loc[validation_known])
+    x_train = make_features(train_context, features=selected_features).loc[train_known].reset_index(drop=True)
+    x_validation = make_features(validation_context, features=selected_features).loc[validation_known].reset_index(drop=True)
+    train, rank_labels, groups = make_rank_groups(train_context.loc[train_known], features=selected_features)
+    validation, validation_grades, validation_groups = make_rank_groups(validation_context.loc[validation_known], features=selected_features)
     y_train = _daily_scores(train["target"], train["Date"])
     y_validation = _daily_scores(validation["target"], validation["Date"])
     weights = _recency_weights(train)
@@ -313,7 +362,7 @@ def train_showcase(train, validation, seed=42, threads=4, max_iterations=500):
     models["catboost"].fit(x_train, y_train, sample_weight=weights,
                            eval_set=(x_validation, y_validation), early_stopping_rounds=stopping, use_best_model=True)
     timings["catboost"] = perf_counter() - started
-    bundle = ShowcaseBundle(models, {"elastic_net": 1.0}, {"intercept": 0.0, "slope": 0.0})
+    bundle = ShowcaseBundle(models, {"elastic_net": 1.0}, {"intercept": 0.0, "slope": 0.0}, input_features=selected_features)
     # Normalize every observable validation stock first, then score only the
     # rows with known outcomes. The same convention is used at inference.
     validation_scores = bundle.predict_all(validation_context).loc[validation_known].reset_index(drop=True)
@@ -321,8 +370,10 @@ def train_showcase(train, validation, seed=42, threads=4, max_iterations=500):
     blended = sum(weight * validation_scores[name].to_numpy() for name, weight in bundle.weights.items())
     bundle.return_calibration = fit_return_calibration(validation, blended)
     metadata = {
-        "seed": int(seed), "threads": int(threads), "feature_names": FEATURE_NAMES,
-        "original_features": list(FEATURES), "excluded_predictors": ["Ticker", "Date", "Sector", "target", "target_rank", "LabelEndDate", "Split"],
+        "seed": int(seed), "threads": int(threads), "feature_names": bundle.feature_names,
+        "input_features": list(selected_features), "feature_schema_version": 2,
+        "original_features": list(FEATURES), "added_features": [name for name in selected_features if name not in FEATURES],
+        "excluded_predictors": sorted(EXCLUDED_PREDICTORS),
         "candidate_params": params, "fitting_seconds": timings,
         "total_training_seconds": perf_counter() - started_all,
         "train_rows": int(len(train)), "validation_rows": int(len(validation)),

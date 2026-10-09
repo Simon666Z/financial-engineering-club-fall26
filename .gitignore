@@ -37,3 +37,7 @@ reports/showcase/.mpl-cache/
 catboost_info/
 
 reports/showcase/positions.parquet
+
+models/alpha/
+
+reports/alpha/*.parquet

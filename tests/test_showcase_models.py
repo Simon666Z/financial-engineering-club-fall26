@@ -8,7 +8,7 @@ import pytest
 from src.data.preparation import FEATURES
 from src.models.showcase import (
     COMPONENTS, FEATURE_NAMES, daily_rank_ic, make_features, make_rank_groups,
-    fit_return_calibration, select_blend, train_showcase,
+    fit_return_calibration, select_blend, train_showcase, transformed_feature_names,
 )
 
 
@@ -174,7 +174,7 @@ def test_unlabeled_stocks_are_kept_in_training_and_validation_context():
         unknown["Ticker"] = "UNKNOWN"
         unknown[FEATURES] = 100.0
         unknown["target"] = np.nan
-        unknown["LabelEndDate"] = pd.NaT
+        unknown["LabelEndDate"] = pd.to_datetime(np.full(len(unknown), np.datetime64("2099-01-01", "ns")))
         return pd.concat([frame, unknown], ignore_index=True).sort_values(["Date", "Ticker"]).reset_index(drop=True)
 
     train = add_unknown_stock(synthetic_frame("2022-09-01", days=12))
@@ -194,3 +194,116 @@ def test_unlabeled_stocks_are_kept_in_training_and_validation_context():
         assert metadata["validation_rank_ic"][component] == daily_rank_ic(labeled, scores[component])
     assert bundle.return_calibration == fit_return_calibration(labeled, scores["ensemble"])
     assert metadata["unlabeled_context_rows"] == {"train": 12, "validation": 5}
+
+
+def expanded_frame(start, days=8, seed=11):
+    frame = synthetic_frame(start, days=days, seed=seed)
+    frame["price_high_252d"] = frame["mom_60d"] / 10 + frame["ret_1d"] ** 2
+    frame["volume_return_5d"] = frame["volume_ratio_20d"] * frame["ret_1d"]
+    return frame
+
+
+def test_expanded_feature_schema_is_explicit_ordered_and_target_free():
+    features = [*FEATURES, "volume_return_5d", "price_high_252d"]
+    frame = expanded_frame("2024-01-02")
+    expected = make_features(frame, features=features)
+    assert expected.columns.tolist() == transformed_feature_names(features)
+    assert expected.columns.tolist()[:len(features)] == features
+    changed = frame.drop(columns=["target", "target_rank", "LabelEndDate"])
+    changed["unused_future_target"] = np.inf
+    pd.testing.assert_frame_equal(expected, make_features(changed, features=features))
+    # Merely adding columns never expands an existing nine-input schema.
+    assert make_features(frame).columns.tolist() == FEATURE_NAMES
+
+
+def test_expanded_bundle_round_trip_and_inference_without_test_labels(tmp_path):
+    features = [*FEATURES, "price_high_252d", "volume_return_5d"]
+    train = expanded_frame("2022-09-01", days=15)
+    validation = expanded_frame("2023-03-01", days=5, seed=22)
+    bundle, metadata = train_showcase(train, validation, threads=1, max_iterations=5, input_features=features)
+    assert bundle.input_features == features
+    assert bundle.feature_names == transformed_feature_names(features)
+    assert metadata["input_features"] == features
+    assert metadata["feature_names"] == bundle.feature_names
+    assert metadata["added_features"] == ["price_high_252d", "volume_return_5d"]
+    assert bundle.models["elastic_net"].named_steps["standardscaler"].n_features_in_ == 2 * len(features)
+    expected_mean = make_features(train, features=features).mean().to_numpy()
+    np.testing.assert_allclose(bundle.models["elastic_net"].named_steps["standardscaler"].mean_, expected_mean, atol=1e-7)
+    frame = expanded_frame("2024-01-02", days=3)
+    expected = bundle.predict_all(frame)
+    pd.testing.assert_frame_equal(expected, bundle.predict_all(frame.drop(columns=["target", "target_rank", "LabelEndDate"])))
+    loaded = joblib.load(bundle.save(tmp_path / "alpha.joblib"))
+    assert loaded.input_features == features
+    assert loaded.feature_names == bundle.feature_names
+    pd.testing.assert_frame_equal(expected, loaded.predict_all(frame))
+    with pytest.raises(ValueError, match="price_high_252d"):
+        loaded.predict_all(frame.drop(columns=["price_high_252d"]))
+
+
+def test_legacy_bundle_without_schema_keeps_original_predictions(fitted_bundle, tmp_path):
+    bundle, _ = fitted_bundle
+    original = bundle.predict_all(expanded_frame("2024-01-02", days=3))
+    legacy = joblib.load(bundle.save(tmp_path / "legacy_source.joblib"))
+    del legacy.input_features
+    assert legacy.feature_names == FEATURE_NAMES
+    pd.testing.assert_frame_equal(original, legacy.predict_all(expanded_frame("2024-01-02", days=3)))
+    # Simulate an original saved object's state, which has no schema field.
+    joblib.dump(legacy, tmp_path / "legacy_without_schema.joblib")
+    restored = joblib.load(tmp_path / "legacy_without_schema.joblib")
+    assert restored.input_features == FEATURES
+    assert restored.feature_names == FEATURE_NAMES
+    pd.testing.assert_frame_equal(original, restored.predict_all(expanded_frame("2024-01-02", days=3)))
+
+
+@pytest.mark.parametrize("features", [
+    [], ["ret_1d", "ret_1d"], ["target"], ["target_rank"], ["target_future"],
+    ["Date"], ["Ticker"], ["LabelEndDate"], ["Split"], ["ret_1d__csrank"], "ret_1d",
+])
+def test_invalid_dynamic_schemas_are_rejected(features):
+    with pytest.raises(ValueError):
+        make_features(synthetic_frame("2024-01-02"), features=features)
+
+
+def test_dynamic_training_can_use_a_schema_without_the_original_inputs():
+    features = ["price_high_252d", "volume_return_5d"]
+    required = ["Date", "Ticker", "target", "LabelEndDate", *features]
+    train = expanded_frame("2022-09-01", days=12)[required]
+    validation = expanded_frame("2023-03-01", days=4, seed=22)[required]
+    bundle, _ = train_showcase(train, validation, threads=1, max_iterations=4, input_features=features)
+    frame = expanded_frame("2024-01-02", days=2)[["Date", "Ticker", *features]]
+    result = bundle.predict_all(frame)
+    assert np.isfinite(result[list(COMPONENTS) + ["ensemble", "ensemble_predicted_return"]]).all().all()
+    assert result[["reversal", "momentum"]].isna().all().all()
+
+
+def test_expanded_features_keep_unlabeled_stocks_in_the_rank_population():
+    features = [*FEATURES, "price_high_252d", "volume_return_5d"]
+
+    def unknown_context(frame):
+        unknown = frame.groupby("Date", sort=False).head(1).copy()
+        unknown["Ticker"] = "UNKNOWN"
+        unknown[features] = 100.0
+        unknown["target"] = np.nan
+        return pd.concat([frame, unknown], ignore_index=True).sort_values(["Date", "Ticker"]).reset_index(drop=True)
+
+    train = unknown_context(expanded_frame("2022-09-01", days=10))
+    validation = unknown_context(expanded_frame("2023-03-01", days=4, seed=22))
+    bundle, metadata = train_showcase(train, validation, input_features=features, threads=1, max_iterations=4)
+    known = train["target"].notna()
+    expected_mean = make_features(train, features=features).loc[known].mean().to_numpy()
+    np.testing.assert_allclose(bundle.models["elastic_net"].named_steps["standardscaler"].mean_, expected_mean, atol=1e-7)
+    without_context = make_features(train.loc[known], features=features).mean().to_numpy()
+    assert not np.allclose(expected_mean[len(features):], without_context[len(features):])
+    known = validation["target"].notna()
+    full_scores = bundle.predict_all(validation).loc[known].reset_index(drop=True)
+    labeled = validation.loc[known].reset_index(drop=True)
+    for name in COMPONENTS:
+        assert metadata["validation_rank_ic"][name] == daily_rank_ic(labeled, full_scores[name])
+
+
+def test_same_day_labels_are_rejected_before_model_fitting():
+    train = synthetic_frame("2022-09-01")
+    validation = synthetic_frame("2023-03-01")
+    train["LabelEndDate"] = train["Date"]
+    with pytest.raises(ValueError, match="not a later date"):
+        train_showcase(train, validation, threads=1, max_iterations=2)

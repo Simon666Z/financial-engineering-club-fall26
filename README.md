@@ -75,12 +75,23 @@ On `SimonResearch`, open [`notebooks/SimonResearch_Showcase.ipynb`](notebooks/Si
 ```bash
 python3.12 -m venv .venv
 .venv/bin/python -m pip install -r requirements-showcase.txt
-.venv/bin/python scripts/run_showcase.py
+.venv/bin/python scripts/run_showcase.py --feature-set alpha --rebuild-features --retrain
 ```
 
-The first run downloads the same universe and date range as `Data.ipynb`, fits four fixed models, selects the blend on 2023, and evaluates 2024–2025. It saves a dashboard at [`reports/showcase/index.html`](reports/showcase/index.html), a complete comparison, data hashes, and fitted models locally. Later runs verify checksums and reuse the completed experiment. `--rebacktest` recomputes execution with the frozen model; `--retrain` explicitly repeats training; `--refresh-data` downloads a new snapshot. Repeating experiments after seeing test results makes that window exploratory.
+The default research run uses the same saved universe and price range as `Data.ipynb`, adds 15 literature-motivated features to its original nine, fits four fixed models, selects the blend on 2023, and evaluates 2024–2025. The [feature guide](docs/alpha-features.md) explains the 24 raw inputs and their 24 same-day percentile transforms. One-year features require a longer warm-up, so the expanded training period starts in 2017 and still ends in 2022.
 
-The model combines XGBoost regression, XGBoost LambdaMART ranking, CatBoost, and ElasticNet through a validation-selected blend. It uses the original nine features plus their observable same-day percentiles. Ranking scores and calibrated return estimates are exported separately. The $1 million backtest adds longs from the top 20 and shorts from the bottom 20 at the next session's OHLC4 proxy. It holds until the prior-close rank leaves the top/bottom 100. New available capital is split 50/50, with short proceeds and collateral reserved; transaction and borrow fees are temporarily set to zero. See the [holding-strategy rules](docs/rank-hold-backtest.md) and [measured results](reports/showcase/RESULTS.md). The first intraday experiment remains archived.
+The new dashboard is [`reports/alpha/index.html`](reports/alpha/index.html), with [measured results](reports/alpha/RESULTS.md), the full comparison, data hashes and fitted models saved locally. The earlier nine-feature experiment remains in [`reports/showcase/`](reports/showcase/RESULTS.md). The saved original model is also scored on the expanded experiment's eligible stocks for a matched test-universe comparison; its training history differs, so this is not a controlled feature-only ablation.
+
+```bash
+# Explicitly rebuild features from the saved prices and train again
+.venv/bin/python scripts/run_showcase.py --feature-set alpha --rebuild-features --retrain
+# Verify and reuse the completed research experiment
+.venv/bin/python scripts/run_showcase.py --feature-set alpha
+```
+
+Later runs verify checksums and reuse the completed experiment. `--rebacktest` recomputes execution with frozen forecasts; `--retrain` explicitly repeats training; `--rebuild-features` rebuilds the new features from saved data. `--refresh-data` downloads a new snapshot. `--feature-set notebook` selects the original feature schema and its separate artifact directory. If no saved prices exist, preparation follows the notebook's download settings. Repeating experiments after seeing test results makes that window exploratory.
+
+The four model candidates are XGBoost regression, XGBoost LambdaMART ranking, CatBoost and ElasticNet. Ranking scores and calibrated next-day return estimates are exported separately. The $1 million backtest adds longs from the top 20 and shorts from the bottom 20 at the next session's OHLC4 proxy. It holds until the prior-close rank leaves the top/bottom 100. Available free capital is split 50/50, with short proceeds and collateral reserved; transaction and borrow fees remain zero as requested. See the [holding-strategy rules](docs/rank-hold-backtest.md). The target and execution rules are unchanged for this feature experiment.
 
 The runner handles the bundled OpenMP runtime used by the macOS wheels. For direct model imports or tests on this Mac, launch Python with:
 

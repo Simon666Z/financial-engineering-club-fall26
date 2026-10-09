@@ -260,6 +260,49 @@ def verdict_panel(metrics: dict, leaderboard: pd.DataFrame) -> str:
 
 
 
+def feature_input_counts(summary: dict) -> dict:
+    """Count the recorded raw and percentile inputs without fixing a feature set."""
+    training = summary.get("training", {})
+    dataset = summary.get("dataset", {})
+    schema = training.get("feature_schema", training.get("schema", {}))
+    if not isinstance(schema, dict):
+        schema = {}
+
+    def names(value):
+        if isinstance(value, (list, tuple)):
+            return [str(item) for item in value]
+        if isinstance(value, dict):
+            for key in ["names", "features", "feature_names", "columns"]:
+                if isinstance(value.get(key), (list, tuple)):
+                    return [str(item) for item in value[key]]
+        return []
+
+    inputs = next((items for items in [
+        names(training.get("feature_names")),
+        names(schema.get("model_input_features")),
+        names(training.get("input_features")),
+        names(schema.get("input_features")),
+        names(schema.get("model_input_features")),
+        names(dataset.get("input_features")),
+    ] if items), [])
+    if inputs:
+        percentiles = [name for name in inputs if name.endswith("__csrank")]
+        raw = [name for name in inputs if not name.endswith("__csrank")]
+        return {"raw": len(raw), "percentiles": len(percentiles), "total": len(inputs)}
+    raw = next((items for items in [
+        names(training.get("input_features")),
+        names(training.get("original_features")),
+        names(training.get("raw_features")),
+        names(schema.get("raw_features")),
+        names(dataset.get("features")),
+    ] if items), [])
+    percentiles = names(schema.get("percentile_features"))
+    if raw:
+        return {"raw": len(raw), "percentiles": len(percentiles) if percentiles else None,
+                "total": len(raw) + len(percentiles) if percentiles else None}
+    return {"raw": None, "percentiles": None, "total": None}
+
+
 def costs_are_zero(evaluation: dict) -> bool:
     """Require recorded zero commissions and zero borrowing costs."""
     try:
@@ -351,6 +394,26 @@ def render_showcase(
     else:
         selected_name, selected_weight = "Selected forecast", "See saved model"
     selected_label = "Selected model" if len(active) == 1 else "Selected blend"
+    def period_years(split, fallback):
+        detail = summary.get("splits", {}).get(split, {})
+        try:
+            first, last = pd.Timestamp(detail["start"]).year, pd.Timestamp(detail["end"]).year
+            return str(first) if first == last else f"{first}–{last}"
+        except (KeyError, TypeError, ValueError):
+            return fallback
+    train_period = period_years("train", "through 2022")
+    validation_period = period_years("validation", "2023")
+    test_period = period_years("test", "2024–2025")
+    feature_counts = feature_input_counts(summary)
+    if feature_counts["raw"] is not None:
+        input_label = f'{feature_counts["raw"]} raw features'
+        if feature_counts["percentiles"] is not None:
+            input_label += f'<br>+ {feature_counts["percentiles"]} daily percentiles'
+    else:
+        input_label = "Recorded feature schema"
+    input_caption = "Research-backed price / volume signals."
+    if feature_counts["total"] is not None:
+        input_caption += f' {feature_counts["total"]} model inputs.'
     is_hold_strategy = evaluation.get("strategy_name") == "rank_hold_long_short" or {"gross_nav", "net_nav"}.issubset(frame.columns)
     top_k = compact(evaluation.get("top_k"))
     cost = number(evaluation.get("cost_bps"), 0)
@@ -435,10 +498,10 @@ main{{max-width:1100px;margin:auto;padding:26px 28px 30px}}header{{display:flex;
 @media(max-width:900px){{.scheme{{grid-template-columns:1fr 1.25fr 1fr;gap:12px}}.arrow{{display:none}}.node{{min-height:130px}}.section-head{{align-items:flex-start;flex-direction:column;gap:4px}}}}
 @media(max-width:600px){{main{{padding:18px 14px}}section{{padding:18px 16px}}header{{align-items:flex-start;flex-direction:column;gap:5px}}.scheme{{grid-template-columns:1fr 1fr}}.node{{padding:12px;min-height:125px}}.candidates{{grid-template-columns:1fr}}.node.candidate-node{{grid-row:span 2}}.metrics{{grid-template-columns:1fr 1fr}}.metric:nth-child(2){{border-right:0}}.metric:nth-child(-n+2){{border-bottom:1px solid var(--line)}}.metric strong{{font-size:25px}}.metrics.three .metric:nth-child(2){{border-right:1px solid var(--line)}}.metrics.three .metric:nth-child(-n+2){{border-bottom:0}}.metrics.three .metric{{padding:12px}}}}
 </style></head><body><main>
-<header><div class="brand">FE CLUB <span>/ SimonResearch</span></div><div class="period">Train 2016–2022 · Validate 2023 · Test 2024–2025</div></header>
+<header><div class="brand">FE CLUB <span>/ SimonResearch</span></div><div class="period">Train {train_period} · Validate {validation_period} · Test {test_period}</div></header>
 <section aria-labelledby="scheme-title"><div class="section-head"><h1 id="scheme-title">Model scheme</h1><p>The four candidates are trained; validation selects the forecast.</p></div>
 <div class="scheme" role="list" aria-label="Model and portfolio workflow">
-<div class="node" role="listitem"><div class="node-title">Inputs</div><strong>9 raw features<br>+ 9 daily percentiles</strong><p>The club notebook's stock data.</p></div>
+<div class="node" role="listitem"><div class="node-title">Inputs</div><strong>{input_label}</strong><p>{input_caption}</p></div>
 <div class="arrow" aria-hidden="true">→</div>
 <div class="node candidate-node" role="listitem"><div class="node-title">Trained candidates</div><div class="candidates"><div class="candidate">Elastic Net</div><div class="candidate">XGBoost regression</div><div class="candidate">XGBoost Ranker</div><div class="candidate">CatBoost</div></div><p>Next-day return ranks<br><span>Ranker learns return deciles.</span></p></div>
 <div class="arrow" aria-hidden="true">→</div>
@@ -448,7 +511,7 @@ main{{max-width:1100px;margin:auto;padding:26px 28px 30px}}header{{display:flex;
 <div class="arrow" aria-hidden="true">→</div>
 <div class="node" role="listitem"><div class="node-title">Trading strategy</div><strong>{strategy_title}</strong><p>{strategy_detail}</p></div>
 </div></section>
-<section aria-labelledby="results-title"><div class="section-head"><h2 id="results-title">2024–2025 backtest</h2><p>{sessions} trading sessions · Selected model strategy</p></div>{capital}<div class="{metrics_class}">{''.join(cards)}</div><div class="chart">{strategy_equity}</div><p class="strategy">{strategy_caption}{conditional}</p><p class="outcome">{outcome}</p><p class="proxy">{proxy_note}</p></section>
+<section aria-labelledby="results-title"><div class="section-head"><h2 id="results-title">{test_period} backtest</h2><p>{sessions} trading sessions · Selected model strategy</p></div>{capital}<div class="{metrics_class}">{''.join(cards)}</div><div class="chart">{strategy_equity}</div><p class="strategy">{strategy_caption}{conditional}</p><p class="outcome">{outcome}</p><p class="proxy">{proxy_note}</p></section>
 <footer>{footer}</footer>
 </main></body></html>'''
     path = report_dir / "index.html"

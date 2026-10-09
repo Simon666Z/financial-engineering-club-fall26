@@ -4,15 +4,15 @@ Simon is the group leader and wants a compelling working model before selecting 
 
 ## Current scope: the notebook data
 
-Build the model demonstration using the universe and price scope in `notebooks/Data.ipynb`, preserving its nine features:
+Build and improve the model using the universe and price scope in `notebooks/Data.ipynb`. Keep the original nine features as a saved baseline:
 
 - `ret_1d`, `mom_5d`, `mom_20d`, `mom_60d`
 - `vol_5d`, `vol_20d`, `volume_ratio_20d`
 - `range_pct`, `intraday_ret`
 
-Use the chronological training period through 2022, 2023 validation, and 2024–2025 test. Fit and select models using the earlier periods, record all model choices, and distinguish next-day learning targets from executable portfolio returns. Retain costs, drawdowns, simple baselines and unresolved execution observations in the recorded artifacts; keep the dashboard simple. No expansion of features, stock universe or dates is needed for this first deliverable.
+Use the chronological training period through 2022, 2023 validation, and 2024–2025 test. Fit and select models using the earlier periods, record all model choices, and distinguish next-day learning targets from executable portfolio returns. Record the configured costs, drawdowns, simple baselines and unresolved execution observations; keep the dashboard simple. The current priority is measured model and strategy performance. Paper planning comes after the working model. Add the requested price/volume features without changing the stock universe or date range.
 
-The run command is `python scripts/run_showcase.py` in the research environment. `notebooks/SimonResearch_Showcase.ipynb` explains and displays the experiment. `reports/showcase/index.html` is the local presentation artifact; `summary.json` and the accompanying CSVs are its evidence.
+The run command is `python scripts/run_showcase.py` in the research environment. `notebooks/SimonResearch_Showcase.ipynb` explains and displays the experiment. `reports/alpha/index.html` is the current local presentation artifact; its `summary.json` and accompanying CSVs are the evidence. The original experiment remains in `reports/showcase/`.
 
 ## What the demo can establish
 
@@ -49,3 +49,10 @@ This is exploratory execution development, not independent confirmation. Before 
 ## Current run: costs temporarily disabled
 
 At Simon's request, transaction costs are set to zero; borrow fees remain zero. The same frozen model and holding rules end at $1,081,595, with cumulative return +8.16%, Sharpe 0.65 and drawdown -6.98%. This describes returns without trading costs. The earlier 10 bps result is preserved in `reports/showcase/archive/hold-v2-10bps/`; restore realistic costs before assessing economic value for the paper.
+
+
+## Expanded features — 8 October 2026
+
+Simon requested the feature experiment before further paper work. The expanded schema keeps the original nine inputs and adds 15 features across skip-month momentum, proximity to the annual high, unusual dollar volume, volume-conditioned reversal, MAX and overnight/intraday decomposition. Each raw input also has an observable same-date percentile, giving 48 model inputs. [Exact formulas](alpha-features.md) are saved with the data manifest.
+
+The original raw snapshot, next-day target, model configurations and zero-cost holding strategy stay fixed. Complete one-year windows reduce the available training history; 2023 still selects stopping iterations and weights. A saved original-model comparison uses the same eligible test stocks. The current measured outcome is recorded in [the new results](../reports/alpha/RESULTS.md).
