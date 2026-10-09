@@ -386,7 +386,11 @@ def model_results_table(leaderboard: pd.DataFrame) -> str:
     """Keep every recorded model, including unresolved comparisons."""
     if leaderboard.empty or "model" not in leaderboard:
         return '<p class="muted">No model comparison was recorded.</p>'
+    include_cost_return = "cumulative_return_after_costs" in leaderboard
     headers = ["Model", "Return", "Sharpe", "Max drawdown", "Ending NAV", "Status"]
+    if include_cost_return:
+        headers[1] = "Return before costs"
+        headers.insert(2, "Return after costs")
     rows = []
     for _, row in leaderboard.iterrows():
         name = str(row["model"])
@@ -407,6 +411,18 @@ def model_results_table(leaderboard: pd.DataFrame) -> str:
         values.append("$" + ending if ending != "—" else "—")
         if invalid:
             values = ["—"] * 4
+        if include_cost_return:
+            cost_status = str(row.get("cost_adjusted_status", "incomplete")).lower()
+            cost_valid = cost_status in {"resolved", "valid", "complete", "recorded", "ok"}
+            cost_return = number(row.get("cumulative_return_after_costs"), 1, True) if cost_valid else "—"
+            if cost_return == "—":
+                cost_failure = row.get("cost_adjusted_failure", "")
+                reason = "" if pd.isna(cost_failure) else str(cost_failure)
+                explanation = "Return after costs unavailable: " + cost_status.replace("_", " ")
+                if reason:
+                    explanation += ". " + reason
+                cost_return = f'<span title="{escape(explanation)}" aria-label="{escape(explanation)}">—</span>'
+            values.insert(1, cost_return)
         failure = row.get("failure", "")
         detail = "" if pd.isna(failure) else str(failure)
         status_html = f'<span title="{escape(detail)}">{escape(status.replace("_", " ").capitalize())}</span>'
@@ -417,6 +433,31 @@ def model_results_table(leaderboard: pd.DataFrame) -> str:
         rows.append(f"<tr{css}>{''.join(cells)}</tr>")
     head = "".join(f'<th scope="col">{header}</th>' for header in headers)
     return f'<div class="table-wrap"><table><thead><tr>{head}</tr></thead><tbody>{"".join(rows)}</tbody></table></div>'
+
+
+def transaction_cost_comparison_note(summary: dict, leaderboard: pd.DataFrame) -> str:
+    """Keep the optional cost replay visibly separate from base performance."""
+    if leaderboard.empty or "cumulative_return_after_costs" not in leaderboard:
+        return ""
+    comparison = summary.get("transaction_cost_comparison", {})
+    rate = comparison.get("cost_bps") if isinstance(comparison, dict) else None
+    if rate is None and "transaction_cost_bps" in leaderboard:
+        recorded = pd.to_numeric(leaderboard["transaction_cost_bps"], errors="coerce").dropna().unique()
+        rate = recorded[0] if len(recorded) == 1 else None
+    try:
+        rate = float(rate)
+        charged = f"{rate:g} bps per buy and sell" if np.isfinite(rate) and rate >= 0 else "the recorded transaction fees"
+    except (TypeError, ValueError):
+        charged = "the recorded transaction fees"
+    base_rate = summary.get("evaluation", {}).get("cost_bps", summary.get("strategy_config", {}).get("cost_bps"))
+    try:
+        base_rate = float(base_rate)
+        base = f"{base_rate:g} bps" if np.isfinite(base_rate) and base_rate >= 0 else "the base scenario"
+    except (TypeError, ValueError):
+        base = "the base scenario"
+    return ('<p class="comparison-note">Return after costs uses ' + escape(charged)
+            + ' in a separate self-financing replay. Return before costs, Sharpe, max drawdown, ending NAV and curves use '
+            + escape(base) + '. Blank cost returns indicate an unavailable or invalid replay; hover for details.</p>')
 
 
 def model_comparison_chart(
@@ -501,6 +542,7 @@ def render_showcase(
     comparison = model_comparison_chart(model_daily, report_dir, leaderboard=leaderboard,
                                         initial_capital=evaluation.get("initial_capital"), cost_free=cost_free)
     comparison_table = model_results_table(leaderboard)
+    cost_comparison_note = transaction_cost_comparison_note(summary, leaderboard)
     external_notes = []
     for name, details in summary.get("external_models", {}).items():
         if not isinstance(details, dict):
@@ -599,9 +641,10 @@ def render_showcase(
     if cost_free:
         try:
             result = float(net_value)
-            outcome = ("This recorded strategy gains with costs excluded." if result > 0 else
-                       "This recorded strategy loses with costs excluded." if result < 0 else
-                       "This recorded strategy breaks even with costs excluded." if result == 0 else
+            subject = "This recorded base strategy" if cost_comparison_note else "This recorded strategy"
+            outcome = (f"{subject} gains with costs excluded." if result > 0 else
+                       f"{subject} loses with costs excluded." if result < 0 else
+                       f"{subject} breaks even with costs excluded." if result == 0 else
                        "Portfolio results are not yet available.")
         except (TypeError, ValueError):
             outcome = "Portfolio results are not yet available."
@@ -642,8 +685,9 @@ def render_showcase(
         proxy_note, capital = "", ""
         footer = "First recorded experiment · Historical demonstration on the notebook universe."
     if cost_free:
-        strategy_caption = strategy_caption.replace(f"{cost} bps commission per side.", "Costs excluded for this run.")
-        strategy_caption = strategy_caption.replace(f"{cost} bps commission per side; allocations fund buy costs.", "Costs excluded for this run.")
+        excluded_caption = "Base results exclude transaction costs." if cost_comparison_note else "Costs excluded for this run."
+        strategy_caption = strategy_caption.replace(f"{cost} bps commission per side.", excluded_caption)
+        strategy_caption = strategy_caption.replace(f"{cost} bps commission per side; allocations fund buy costs.", excluded_caption)
         proxy_note = proxy_note.replace(" Borrow fee: 0 bps/year.", "")
     document = f'''<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -668,7 +712,7 @@ main{{max-width:1100px;margin:auto;padding:26px 28px 30px}}header{{display:flex;
 <div class="arrow" aria-hidden="true">→</div>
 <div class="node" role="listitem"><div class="node-title">Trading strategy</div><strong>{strategy_title}</strong><p>{strategy_detail}</p></div>
 </div></section>
-<section aria-labelledby="results-title"><div class="section-head"><h2 id="results-title">{test_period} backtest</h2><p>{sessions} trading sessions · Frozen blend strategy</p></div><p class="result-label">Blend / selected forecast</p>{capital}<div class="{metrics_class}">{''.join(cards)}</div><div class="chart">{comparison}</div>{comparison_table}<p class="comparison-note">Every model and baseline uses the recorded trading policy. Blank metrics mean an incomplete, unresolved or invalid performance result; those paths are omitted from the chart. Solid lines: trained models and blend. Dashed lines: baselines / benchmarks.</p>{external_note}<p class="strategy">{strategy_caption}{conditional}</p><p class="outcome">{outcome}</p><p class="proxy">{proxy_note}</p></section>
+<section aria-labelledby="results-title"><div class="section-head"><h2 id="results-title">{test_period} backtest</h2><p>{sessions} trading sessions · Frozen blend strategy</p></div><p class="result-label">Blend / selected forecast</p>{capital}<div class="{metrics_class}">{''.join(cards)}</div><div class="chart">{comparison}</div>{comparison_table}<p class="comparison-note">Every model and baseline uses the recorded trading policy. Blank metrics mean an incomplete, unresolved or invalid performance result; those paths are omitted from the chart. Solid lines: trained models and blend. Dashed lines: baselines / benchmarks.</p>{cost_comparison_note}{external_note}<p class="strategy">{strategy_caption}{conditional}</p><p class="outcome">{outcome}</p><p class="proxy">{proxy_note}</p></section>
 <footer>{footer}</footer>
 </main></body></html>'''
     path = report_dir / "index.html"

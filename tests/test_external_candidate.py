@@ -12,7 +12,7 @@ import pandas as pd
 from src.reporting.showcase import (
     EXTERNAL_CANDIDATE, external_candidate_inputs, load_external_candidate,
     model_name, model_results_table, canonical_digest, parquet_digest,
-    PADDED_QUERY_PROTOCOL, padded_batch_plan,
+    PADDED_QUERY_PROTOCOL, padded_batch_plan, transaction_cost_comparison_note,
 )
 
 
@@ -353,6 +353,53 @@ class ExternalCandidateTests(unittest.TestCase):
         write_json(path, preflight)
         with self.assertRaisesRegex(ValueError, "preregistered"):
             self.load()
+
+    def test_cost_return_column_is_adjacent_to_base_return(self):
+        board = pd.DataFrame([{"model": "ensemble", "status": "resolved", "cumulative_net_return": 0.7,
+            "sharpe_net": 1.8, "max_drawdown_net": -0.09, "final_net_equity": 1700000,
+            "cumulative_return_after_costs": 0.65, "transaction_cost_bps": 10, "cost_adjusted_status": "resolved"}])
+        rendered = model_results_table(board)
+        expected_headers = ["Model", "Return before costs", "Return after costs", "Sharpe", "Max drawdown", "Ending NAV", "Status"]
+        positions = [rendered.index(f'<th scope="col">{label}</th>') for label in expected_headers]
+        self.assertEqual(positions, sorted(positions))
+        for value in ["70.0%", "65.0%", "1.80", "-9.0%", "$1,700,000"]:
+            self.assertIn(value, rendered)
+        self.assertEqual(rendered.count("Return after costs"), 1)
+        self.assertNotIn("final_equity_after_costs", rendered)
+
+    def test_invalid_cost_replay_is_blank_and_reason_is_escaped(self):
+        board = pd.DataFrame([{"model": "catboost", "status": "resolved", "cumulative_net_return": 0.71,
+            "cumulative_return_after_costs": 0.99, "cost_adjusted_status": "invalid",
+            "cost_adjusted_failure": 'Funding <breach> & unresolved quote.'}])
+        rendered = model_results_table(board)
+        self.assertIn("71.0%", rendered)
+        self.assertNotIn("99.0%", rendered)
+        self.assertIn("Return after costs unavailable: invalid", rendered)
+        self.assertIn("Funding &lt;breach&gt; &amp; unresolved quote.", rendered)
+        self.assertIn('aria-label="Return after costs unavailable:', rendered)
+        self.assertNotIn("<breach>", rendered)
+
+    def test_cost_return_is_independent_and_can_show_a_loss(self):
+        board = pd.DataFrame([{"model": "reversal", "status": "invalid", "cumulative_net_return": 0.5,
+            "cumulative_return_after_costs": -0.12, "cost_adjusted_status": "resolved"}])
+        rendered = model_results_table(board)
+        self.assertIn("-12.0%", rendered)
+        self.assertNotIn("50.0%", rendered)
+        self.assertEqual(rendered.count("<td>—</td>"), 4)
+
+    def test_cost_note_separates_ten_bps_replay_from_zero_bps_base(self):
+        board = pd.DataFrame([{"model": "ensemble", "cumulative_return_after_costs": 0.65, "transaction_cost_bps": 10}])
+        summary = {"evaluation": {"cost_bps": 0}, "transaction_cost_comparison": {"cost_bps": 10}}
+        note = transaction_cost_comparison_note(summary, board)
+        self.assertIn("10 bps per buy and sell", note)
+        self.assertIn("separate self-financing replay", note)
+        self.assertIn("Return before costs, Sharpe, max drawdown, ending NAV and curves use 0 bps", note)
+        original_board = board.drop(columns="cumulative_return_after_costs")
+        self.assertEqual(transaction_cost_comparison_note(summary, original_board), "")
+        original_table = model_results_table(original_board)
+        self.assertNotIn("Return after costs", original_table)
+        self.assertNotIn("Return before costs", original_table)
+        self.assertIn('<th scope="col">Return</th>', original_table)
 
     def test_pilot_metrics_render_as_blanks_even_if_supplied(self):
         board = pd.DataFrame([{"model": EXTERNAL_CANDIDATE, "status": "pilot_only", "cumulative_net_return": 0.99,

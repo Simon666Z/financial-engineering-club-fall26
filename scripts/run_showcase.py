@@ -36,6 +36,7 @@ import pandas as pd
 
 from src.backtests.showcase import score_predictions
 from src.backtests.rank_hold import evaluate_rank_hold
+from src.backtests.cost_comparison import evaluate_cost_scenario
 from src.data.rank_hold import load_rank_hold_prices
 from src.data.alpha import ALPHA_INPUTS, ALPHA_PATHS, load_alpha_data
 from src.data.preparation import FEATURES
@@ -128,14 +129,19 @@ def main():
     config_path = ROOT / 'config/rank_hold.json'
     config = json.loads(config_path.read_text())
     config_hash = sha256_file(config_path)
+    comparison_cost_bps = config.get("comparison_cost_bps")
+    if comparison_cost_bps is not None and (not np.isfinite(comparison_cost_bps) or not 0 <= comparison_cost_bps < 10000):
+        raise ValueError("comparison_cost_bps must be finite and between 0 and 10000.")
     external_hashes = external_candidate_inputs(ROOT) if args.feature_set == 'alpha' else {}
     source_files = ['src/data/preparation.py', 'src/data/showcase.py', 'src/data/rank_hold.py',
-                    'src/models/showcase.py', 'src/backtests/showcase.py', 'src/backtests/rank_hold.py',
+                    'src/models/showcase.py', 'src/backtests/showcase.py', 'src/backtests/rank_hold.py', 'src/backtests/cost_comparison.py',
                     'scripts/run_showcase.py', 'src/reporting/showcase.py']
     if args.feature_set == 'alpha':
         source_files += ['src/data/alpha.py', 'src/data/alpha_features.py']
     source_hashes = {name: sha256_file(ROOT / name) for name in source_files}
     required = ['summary.json', 'leaderboard.csv', 'daily.csv', 'top_predictions.csv', 'feature_importance.csv', 'index.html', 'model_daily.csv']
+    if comparison_cost_bps is not None:
+        required.append('cost_model_daily.csv')
     old = json.loads((report / 'summary.json').read_text()) if (report / 'summary.json').exists() else None
     if not any([args.retrain, args.refresh_data, args.rebacktest, args.rebuild_features]) and all((report / name).exists() for name in required):
         if old.get('strategy_config_sha256') == config_hash and old.get('runtime', {}).get('source_sha256') == source_hashes and old.get('external_input_sha256', {}) == external_hashes:
@@ -249,6 +255,7 @@ def main():
     parameters.update(annual_borrow_bps=config['borrow_fee_bps_annual'], price_units=config['execution_price'])
     external_details, external_forecast = load_external_candidate(ROOT, manifest=manifest, feature_names=list(bundle.feature_names), expected_keys=splits['test'][['Date', 'Ticker']]) if args.feature_set == 'alpha' else ({}, None)
     leaderboard, evaluations, daily_comparisons = [], {}, []
+    cost_evaluations, cost_daily_comparisons = {}, []
     selected_daily = None
     comparison_names = ['ensemble', *COMPONENTS, 'reversal', 'momentum'] + (['notebook_baseline'] if 'notebook_baseline' in predictions else [])
     if external_forecast is not None:
@@ -296,6 +303,29 @@ def main():
             trades.to_parquet(report / 'trades.parquet', index=False)
             positions.to_parquet(report / 'positions.parquet', index=False)
         leaderboard.append({'model': name, 'rank_ic': evaluation['rank_ic_mean'], 'rank_ic_days': evaluation['rank_ic_scored_dates'], 'rmse_if_return_prediction': rmse, 'initial_capital': evaluation['initial_capital'], 'final_gross_equity': evaluation['final_gross_equity'], 'final_net_equity': evaluation['final_net_equity'], 'cumulative_gross_return': evaluation['gross_cumulative_return'], 'cumulative_net_return': evaluation['net_cumulative_return'], 'sharpe_net': evaluation['annualized_sharpe'], 'max_drawdown_net': evaluation['max_drawdown'], 'resolved_days': evaluation['aggregate_resolved_dates'], 'status': evaluation.get('status', 'resolved'), 'failure': evaluation.get('failure', '')})
+        if comparison_cost_bps is not None:
+            print(f'Evaluating {name}: {comparison_cost_bps:g} bps per buy/sell cost comparison.', flush=True)
+            cost_evaluation, cost_daily, cost_trades, cost_positions, cost_fields = evaluate_cost_scenario(
+                quote_panel, candidate_predictions[['Date', 'Ticker', name]], prediction_column=name,
+                parameters=parameters, cost_bps=comparison_cost_bps)
+            if daily is not None and cost_daily is not None:
+                if not daily['Date'].equals(cost_daily['Date']) or not np.array_equal(daily['gross_nav'].to_numpy(), cost_daily['gross_nav'].to_numpy()):
+                    raise ValueError('Transaction-cost replay changed the frozen gross portfolio: ' + name)
+            cost_evaluations[name] = cost_evaluation
+            leaderboard[-1].update(cost_fields)
+            if cost_daily is not None:
+                comparison_daily = cost_daily[['Date', 'net_nav', 'net_return', 'gross_nav', 'gross_return',
+                                              'net_transaction_cost', 'net_cumulative_transaction_cost']].copy()
+                comparison_daily['model'] = name
+                comparison_daily['transaction_cost_bps'] = comparison_cost_bps
+                comparison_daily['performance_valid'] = cost_fields['cost_adjusted_status'] == 'resolved'
+                comparison_daily['status'] = cost_fields['cost_adjusted_status']
+                cost_daily_comparisons.append(comparison_daily)
+            if name == 'ensemble' and cost_daily is not None:
+                cost_daily.to_csv(report / 'cost_daily.csv', index=False)
+                cost_trades.to_parquet(report / 'cost_trades.parquet', index=False)
+                cost_positions.to_parquet(report / 'cost_positions.parquet', index=False)
+            del cost_trades, cost_positions
         del trades, positions
     if external_details and external_forecast is None:
         reason = external_details.get('reason', 'Complete test performance has not been measured.')
@@ -308,6 +338,17 @@ def main():
             'sharpe_net': np.nan, 'max_drawdown_net': np.nan, 'resolved_days': 0,
             'status': external_details['status'], 'failure': reason, 'performance_valid': False,
         })
+        if comparison_cost_bps is not None:
+            leaderboard[-1].update(cumulative_return_after_costs=np.nan, transaction_cost_bps=comparison_cost_bps,
+                                   final_equity_after_costs=np.nan, transaction_costs_paid=np.nan,
+                                   cost_adjusted_status=external_details['status'], cost_adjusted_failure=reason)
+            cost_evaluations[EXTERNAL_CANDIDATE] = {'status': external_details['status'], 'failure': reason,
+                                                   'cost_bps': comparison_cost_bps, 'net_performance_valid': False}
+    if comparison_cost_bps is not None:
+        cost_columns = ['Date', 'net_nav', 'net_return', 'gross_nav', 'gross_return', 'net_transaction_cost',
+                        'net_cumulative_transaction_cost', 'model', 'transaction_cost_bps', 'performance_valid', 'status']
+        cost_model_daily = pd.concat(cost_daily_comparisons, ignore_index=True) if cost_daily_comparisons else pd.DataFrame(columns=cost_columns)
+        cost_model_daily.to_csv(report / 'cost_model_daily.csv', index=False)
     board = pd.DataFrame(leaderboard)
     selected_daily.to_csv(report / 'daily.csv', index=False)
     model_daily = pd.concat(daily_comparisons, ignore_index=True)
@@ -332,6 +373,10 @@ def main():
         'model_artifact_path': str(fitted_path.relative_to(ROOT)), 'predictions_artifact_path': str(prediction_path.relative_to(ROOT)),
         'model_sha256': model_hash, 'predictions_sha256': sha256_file(prediction_path),
         'evaluation': evaluations['ensemble'], 'comparison_evaluations': evaluations,
+        'transaction_cost_comparison': {'cost_bps': comparison_cost_bps,
+            'method': 'independent self-financing replay of the same frozen forecasts',
+            'base_cost_bps': config['cost_bps'], 'evaluations': cost_evaluations,
+            'daily_path': str((report / 'cost_model_daily.csv').relative_to(ROOT)) if comparison_cost_bps is not None else None},
         'runtime': {'python': sys.version, 'packages': packages, 'source_sha256': source_hashes},
         'previous_evaluations': previous_evaluations,
         'protocol': {

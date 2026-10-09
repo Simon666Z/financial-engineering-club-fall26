@@ -23,7 +23,15 @@ Equity = free cash + marked long assets
 
 OHLC4 is a simulated full-day fill known after that day's close. Orders use only the prior completed session. The adjustment is consistent with [yfinance's auto_adjust scaling](https://github.com/ranaroussi/yfinance/blob/main/yfinance/utils.py). Quantities are synthetic total-return units; they embed price adjustments and do not add separate dividend cash or split-share credits.
 
-The book uses no shorts or borrowing. Initial gross exposure is funded by its cash, and holdings can concentrate through repeated additions; there is no position cap or stop. Final positions are marked without a forced terminal sale. Cash earns zero. Transaction costs currently remain **0 bps** at Simon's request. Spread, impact, volume participation and actual dividend cash timing are not modeled.
+The book uses no shorts or borrowing. Initial gross exposure is funded by its cash, and holdings can concentrate through repeated additions; there is no position cap or stop. Final positions are marked without a forced terminal sale. Cash earns zero. The primary comparison remains **0 bps**. A separate after-cost return column replays each model at **10 bps (0.10%) per filled buy or sell**, as requested by Simon. Spread, impact, volume participation and actual dividend cash timing are not modeled.
+
+## Transaction-cost comparison
+
+`config/rank_hold.json` records `cost_bps=0` for the existing metric/curve comparison and `comparison_cost_bps=10` for the additional return column. The models, forecasts, universe, rankings and trading timing are identical in both scenarios. This is an independently funded replay, rather than a subtraction from the final gross return.
+
+At 10 bps, a buy budget `B` funds `B / 1.001` of stock and its commission within the same budget. A sale releases `sale_notional × 0.999`. Net sale proceeds become investable at the signal close for the following session's orders. Subsequent quantities therefore reflect fees already paid. Cash earns zero and open final positions are marked without terminal liquidation costs.
+
+`leaderboard.csv` includes `cumulative_return_after_costs`, `transaction_cost_bps`, `final_equity_after_costs`, `transaction_costs_paid`, `cost_adjusted_status` and `cost_adjusted_failure`. Invalid or incomplete fee scenarios have no invented return. `summary.json` records the rate and each scenario's evaluation. `cost_model_daily.csv` retains all nine costed curves; `cost_daily.csv`, `cost_trades.parquet` and `cost_positions.parquet` audit the blend's separate fee-funded book.
 
 ## Inspect every model
 

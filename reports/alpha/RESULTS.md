@@ -6,21 +6,23 @@ The validation-selected four-model blend turns $1 million into **$1,709,546.02**
 
 Start with $1 million at the close of 2024-01-02. Budget **all already-available free cash** equally among the top 20 ranked stocks. The first fills occur 2024-01-03 at that session's synthetic adjusted OHLC4. Retain existing holdings while ranked in the top 100; a rank above 100 or loss of eligibility schedules an exit for the following session. Additions can increase existing holdings, and retained stocks can make the book exceed 20 names.
 
-Exit proceeds become available at that execution day's close for the next session's orders. There are no shorts, leverage or short collateral. Final holdings are marked at the final observed close; no forced liquidation is invented. Fees remain zero. [Full accounting protocol](../../docs/rank-hold-backtest.md).
+Exit proceeds become available at that execution day's close for the next session's orders. There are no shorts, leverage or short collateral. Final holdings are marked at the final observed close; no forced liquidation is invented. The base scenario has zero fees; the separate return column charges 10 bps per buy and sell. [Full accounting protocol](../../docs/rank-hold-backtest.md).
 
 ## Every model and the blend
 
-| Model | Cumulative return | Sharpe | Maximum drawdown | Ending equity | Status |
-|---|---:|---:|---:|---:|---|
-| Blend (25% each) | +70.95% | 1.835 | -8.79% | $1,709,546.02 | resolved |
-| Elastic Net | +73.76% | 1.680 | -12.27% | $1,737,623.24 | resolved |
-| XGBoost regression | +56.42% | 1.280 | -18.63% | $1,564,215.01 | resolved |
-| XGBoost Ranker | +66.23% | 1.877 | -11.55% | $1,662,283.70 | resolved |
-| CatBoost | +71.38% | 1.646 | -12.81% | $1,713,805.49 | resolved |
-| Reversal baseline | +50.19% | 1.526 | -8.13% | $1,501,903.34 | resolved |
-| Momentum baseline | +181.68% | 1.898 | -26.67% | $2,816,810.27 | resolved |
-| Original-feature baseline | +39.94% | 1.435 | -10.31% | $1,399,355.12 | resolved |
-| TabPFN-3.5 | +252.51% | 1.392 | -39.40% | $3,525,086.84 | resolved |
+| Model | Return before costs | Return after costs (10 bps/side) | Sharpe before costs | Maximum drawdown before costs | Ending equity before costs | Status |
+|---|---:|---:|---:|---:|---:|---|
+| Blend (25% each) | +70.95% | +23.03% | 1.835 | -8.79% | $1,709,546.02 | resolved |
+| Elastic Net | +73.76% | +36.40% | 1.680 | -12.27% | $1,737,623.24 | resolved |
+| XGBoost regression | +56.42% | +14.28% | 1.280 | -18.63% | $1,564,215.01 | resolved |
+| XGBoost Ranker | +66.23% | +15.19% | 1.877 | -11.55% | $1,662,283.70 | resolved |
+| CatBoost | +71.38% | +23.46% | 1.646 | -12.81% | $1,713,805.49 | resolved |
+| Reversal baseline | +50.19% | -2.00% | 1.526 | -8.13% | $1,501,903.34 | resolved |
+| Momentum baseline | +181.68% | +164.77% | 1.898 | -26.67% | $2,816,810.27 | resolved |
+| Original-feature baseline | +39.94% | -3.08% | 1.435 | -10.31% | $1,399,355.12 | resolved |
+| TabPFN-3.5 | +252.51% | +223.78% | 1.392 | -39.40% | $3,525,086.84 | resolved |
+
+The separate after-cost return uses **10 bps (0.10%) of every filled buy and sell**. Each model is replayed with its own fee-funded cash and holdings, so fees reduce later investable capital and compounding. All other table metrics and plotted curves retain the 0 bps base scenario. Open final holdings incur no invented liquidation fee. Costed curves are saved in `cost_model_daily.csv`; the blend's fee ledger and holdings are saved in `cost_trades.parquet` and `cost_positions.parquet`.
 
 The four-model blend was selected on 2023 ranking accuracy and remains 25% each ElasticNet, XGBoost regression, XGBoost Ranker and CatBoost. The test comparison does not change those weights. The momentum baseline's observed return exceeds every original local model; profit alone does not establish that model complexity added value. Long-only profits include broad equity exposure and are not a market-neutral alpha estimate.
 

@@ -2,6 +2,8 @@
 
 The full candidate completed on October 9, 2026: **122,255 validation forecasts across 249 dates** and **248,377 test forecasts across 502 dates**. Under the same long-only strategy as every other model, $1 million becomes **$3,525,086.84** in 2024–2025: **+252.51% cumulative return**, **1.392 annualized Sharpe**, and **-39.40% maximum drawdown**, excluding costs. The four-model blend remains unchanged. [All model results](../reports/alpha/RESULTS.md).
 
+The separate **10 bps per buy/sell** replay produces **+223.78%** for TabPFN, ending at **$3,237,761.29**; the blend produces **+23.03%**. Fees are paid within each portfolio and reduce later investable cash. Existing before-cost curves and model settings are unchanged. [Fee accounting](rank-hold-backtest.md).
+
 ## Fixed comparison
 
 | Setting | TabPFN candidate |
