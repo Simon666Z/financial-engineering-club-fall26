@@ -1,70 +1,46 @@
-# Expanded-feature model — measured run
+# Long-only model comparison
 
-The new validation-selected model has a positive **+9.77% cumulative return with costs excluded**, ending at **$1,097,653.29** from $1 million. Its next-day ranking quality improves, but its Sharpe and drawdown are worse than the saved original model on the same eligible test stocks. This is a completed feature experiment, not yet a consistently stronger trading strategy.
+The validation-selected four-model blend turns $1 million into **$1,709,546.02** in 2024–2025: **+70.95%**, annualized Sharpe **1.835**, and maximum drawdown **-8.79%**, with costs excluded. Every saved model is evaluated separately using identical prices, eligible stocks and trading rules. The model and forecast table remain frozen; this run changes execution only.
 
-## Selected model and data
+## Trading scheme
 
-- **Inputs:** original nine plus 15 research features = 24 raw inputs and 24 observable daily percentile transforms (48 total). [Formulas and sources](../../docs/alpha-features.md).
-- **Selected on 2023:** 25% ElasticNet, 25% XGBoost regression, 25% XGBoost LambdaMART ranking, 25% CatBoost. Twelve fixed blend candidates; validation mean daily rank IC selects the blend. No test result changes this choice.
-- **Stopping iterations:** XGBoost regression 72, ranking 39, CatBoost 58, using zero-based best-iteration indices (predictions use 73, 40 and 59 rounds respectively).
-- **Target:** next-session adjusted-close return, learned as daily return ranks (regressors) or ten return relevance grades (ranker). The separately exported decimal return estimate is calibrated on 2023.
-- **Raw data:** unchanged saved notebook prices/constituents. Snapshot SHA-256 `4aa57a8e505bd98a121b59ec0b615ef74ec99183dfdd11e4bf111ee877b36d5c`. No new price download.
+Start with $1 million at the close of 2024-01-02. Budget **all already-available free cash** equally among the top 20 ranked stocks. The first fills occur 2024-01-03 at that session's synthetic adjusted OHLC4. Retain existing holdings while ranked in the top 100; a rank above 100 or loss of eligibility schedules an exit for the following session. Additions can increase existing holdings, and retained stocks can make the book exceed 20 names.
 
-| Split | Signal dates | Rows | Rows with known labels |
-|---|---|---:|---:|
-| Train | 2017-01-03 → 2022-12-29 | 712,325 | 712,313 |
-| Validation | 2023-01-03 → 2023-12-28 | 122,255 | 122,255 |
-| Test | 2024-01-02 → 2025-12-31 | 248,377 | 247,879 |
+Exit proceeds become available at that execution day's close for the next session's orders. There are no shorts, leverage or short collateral. Final holdings are marked at the final observed close; no forced liquidation is invented. Fees remain zero. [Full accounting protocol](../../docs/rank-hold-backtest.md).
 
-The complete one-year windows delay first training signals until 2017-01-03 and reduce the usable history. Boundary-crossing training/validation labels are purged. Missing future returns do not remove observable signal rows; the final signals remain in forecasts even when no next-session label/fill exists. The expanded table covers 498 securities over the full period, with changing daily eligibility.
+## Every model and the blend
 
-## Matched test comparison
-
-Both rows below use the expanded experiment's same eligible test cross-sections and the same strategy. The original saved model was trained on its longer original history, so this compares two models; it does not isolate the causal effect of adding features.
-
-| Metric | Original model, matched stocks | New selected blend |
-|---|---:|---:|
-| Ending equity | $1,086,157.50 | $1,097,653.29 |
-| Cumulative return, no costs | +8.62% | +9.77% |
-| Annualized Sharpe | 0.686 | 0.465 |
-| Maximum drawdown | -6.50% | -18.83% |
-| Mean daily next-day rank IC | 0.01138 | 0.02829 |
-| Mean daily traded notional / prior equity | 73.65% | 55.80% |
-
-The earlier original-universe result remains [archived in its existing report](../showcase/RESULTS.md): +8.16%, Sharpe 0.650, drawdown −6.98%. Its eligible test population differs slightly from the matched comparison above.
-
-## Trading result and full comparison
-
-The $1 million book starts 2024-01-02, with first fills 2024-01-03. Closing scores schedule next-session top 20 long/bottom 20 short additions at adjusted OHLC4. Longs remain while top 100 and shorts while bottom 100. Free cash is allocated 50/50; entry short collateral and sale proceeds are reserved. Exit releases fund orders planned after that execution day's close. [Accounting rules](../../docs/rank-hold-backtest.md).
-
-The selected book resolves all 501 return sessions, with zero missing entry/exit fills, no funding shortfall or insolvency, and identical gross/net paths. Final equity includes open positions, without forced terminal liquidation. Costs and borrow fees are both zero.
-
-| Model / baseline | Rank IC | Return, no costs | Sharpe | Drawdown | Portfolio status |
+| Model | Cumulative return | Sharpe | Maximum drawdown | Ending equity | Status |
 |---|---:|---:|---:|---:|---|
-| ensemble | 0.02829 | +9.77% | 0.465 | -18.83% | resolved |
-| elastic_net | 0.02932 | — | — | — | unresolved |
-| xgb_regression | 0.02560 | -1.89% | 0.008 | -22.94% | resolved |
-| xgb_ranker | 0.02561 | +13.54% | 0.813 | -9.09% | resolved |
-| catboost | 0.02572 | +7.92% | 0.354 | -20.15% | resolved |
-| reversal | 0.01644 | +8.10% | 0.587 | -8.02% | resolved |
-| momentum | -0.00735 | — | — | — | unresolved |
-| notebook_baseline | 0.01138 | +8.62% | 0.686 | -6.50% | resolved |
+| Blend (25% each) | +70.95% | 1.835 | -8.79% | $1,709,546.02 | resolved |
+| Elastic Net | +73.76% | 1.680 | -12.27% | $1,737,623.24 | resolved |
+| XGBoost regression | +56.42% | 1.280 | -18.63% | $1,564,215.01 | resolved |
+| XGBoost Ranker | +66.23% | 1.877 | -11.55% | $1,662,283.70 | resolved |
+| CatBoost | +71.38% | 1.646 | -12.81% | $1,713,805.49 | resolved |
+| Reversal baseline | +50.19% | 1.526 | -8.13% | $1,501,903.34 | resolved |
+| Momentum baseline | +181.68% | 1.898 | -26.67% | $2,816,810.27 | resolved |
+| Original-feature baseline | +39.94% | 1.435 | -10.31% | $1,399,355.12 | resolved |
+| TabPFN-3.5 | — | — | — | — | pilot only |
 
-The largest selected-book daily loss was −7.84% on 2024-11-15, dominated by a retained BE short. The saved closing price rose from $13.28 to $21.14 (+59.19%) with an unchanged adjustment factor. A further BE short loss dominated 2024-11-22. Its accumulated short exposure reached 39.26% of NAV on 2024-12-02; BE explains about 79% of the peak-to-trough dollar loss. Repeated additions and retained holdings can concentrate exposure because this strategy has no position cap or stop. These observations come from the saved quotes and position ledger; no external event explanation is assumed.
+The four-model blend was selected on 2023 ranking accuracy and remains 25% each ElasticNet, XGBoost regression, XGBoost Ranker and CatBoost. The test comparison does not change those weights. The momentum baseline's observed return exceeds the learned models; profit alone does not establish that model complexity added value. Long-only profits include broad equity exposure and are not a market-neutral alpha estimate.
 
-The expanded XGBoost Ranker alone has a better observed test strategy result than the selected blend. It is reported as an exploratory comparison; the validation-selected blend remains the primary result. ElasticNet and momentum hold FISV when its 2025-11-12 closing mark is missing; their full-period portfolio results remain unresolved. No stale price or zero return is substituted, and the ticker was not excluded using future quote availability.
+The original-feature baseline is the saved original model applied to the same expanded eligible test stocks. It has a different training history. All available resolved model curves are shown separately in the dashboard and `model_daily.csv`; the blend is highlighted. A missing or invalid model remains in the table with its status and no invented portfolio performance.
 
-## Inspect and reproduce
+## Frozen experiment and checks
+
+- 24 raw signals + 24 target-free same-day percentile transforms = 48 inputs. [Exact features](../../docs/alpha-features.md).
+- Training signal dates 2017-01-03 to 2022-12-29, validation 2023-01-03 to 2023-12-28, test 2024-01-02 to 2025-12-31. Training/validation labels crossing their boundaries are purged.
+- Original saved raw snapshot is unchanged. No price data or new fitted core model was fetched for this execution revision.
+- The selected book resolves all 501 return sessions. Its short inventory and collateral stay zero, gross/net paths coincide, and entries/exits lag their signals by one observed session.
+- The previous long/short result and its ledgers remain in [archive/long-short-v1](archive/long-short-v1/RESULTS.md).
+
+The data's current-at-download membership has survivorship and membership bias. OHLC4 is hypothetical execution, and adjusted quotes simulate total-return units. This repeatedly viewed 2024–2025 window is exploratory. Fees, spread and market impact are excluded. These assumptions remain attached to all displayed performance.
+
+## Reproduce
 
 ```bash
-# Verify saved artifacts and reuse this completed run
 .venv/bin/python scripts/run_showcase.py --feature-set alpha
-# Recompute this strategy using its saved model and forecasts
 .venv/bin/python scripts/run_showcase.py --feature-set alpha --rebacktest
-# Explicit new feature rebuild and fit, using saved raw data
-.venv/bin/python scripts/run_showcase.py --feature-set alpha --rebuild-features --retrain
 ```
 
-Open [the dashboard](index.html) or [the executed notebook](../../notebooks/SimonResearch_Showcase.ipynb). `summary.json` records hashes, split dates, protocol and every comparison; `training.json` retains candidate parameters and all validation trials. `daily.csv` contains the equity observations. Complete forecasts, trades, positions and fitted models stay local as ignored large artifacts.
-
-The universe uses current-at-download membership, so historical results have survivorship and membership bias. OHLC4 is a hypothetical fill proxy; the prices are synthetic adjusted total-return units. The 2024–2025 window has already informed exploratory development. These limitations and the zero-cost assumption remain part of the measured result.
+The first command checks hashes and reuses the complete run. The second replays execution using the same saved forecasts. Open [the dashboard](index.html), [the notebook](../../notebooks/SimonResearch_Showcase.ipynb), `summary.json`, `leaderboard.csv` and `model_daily.csv`. TabPFN-3.5 successfully returned a 490-stock validation-date pilot. Its predeclared batch-independence diagnostic failed, so it is shown as pilot only with blank full-period performance. Three queries consumed 30,000 API tokens. The frozen blend is unchanged. [Pilot evidence and budget](../../docs/tabpfn.md).

@@ -46,7 +46,7 @@ These longer histories can delay the first training date and temporarily exclude
 
 The learning label remains the next-day adjusted-close return, `P[t+1] / P[t] − 1`. Elastic Net, XGBoost regression and CatBoost learn its centered daily ranks; XGBoost Ranker learns daily return-decile grades. Training ends in 2022, 2023 validation selects settings and forecast weights, and the selected forecast is frozen for the 2024–2025 backtest.
 
-The strategy still starts with $1 million, adds to the top 20 long and bottom 20 short, and retains longs while top 100 and shorts while bottom 100. Close-based decisions fill the next session using the synthetic adjusted OHLC4 proxy. Available cash is allocated 50/50 by side; short proceeds and entry collateral remain segregated. Exits release cash for the following session's entries. The current run excludes commissions and borrowing fees. See the [holding-strategy protocol](rank-hold-backtest.md) for the complete accounting rules.
+The current strategy starts with $1 million, adds to the top 20 long only, and retains positions while in the top 100. Close-based decisions fill the next session using the synthetic adjusted OHLC4 proxy. All already-available free cash is allocated equally among the selected long stocks. Exits release cash for the following session's entries. The current run excludes commissions and borrowing fees. See the [holding-strategy protocol](rank-hold-backtest.md) for the complete accounting rules.
 
 ## Run and inspect
 

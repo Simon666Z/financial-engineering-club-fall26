@@ -1,6 +1,7 @@
 """Render recorded showcase results as a self-contained local dashboard."""
 from __future__ import annotations
 
+import hashlib
 import html
 import json
 from pathlib import Path
@@ -358,11 +359,126 @@ def strategy_equity_chart(
                       else "Selected strategy equity before costs and after costs")
 
 
+
+def model_name(value: Any) -> str:
+    """Use stable human names while allowing new learners and benchmarks."""
+    name = str(value)
+    return {
+        "ensemble": "Blend",
+        "blend": "Blend",
+        "elastic_net": "Elastic Net",
+        "xgb_regression": "XGBoost regression",
+        "xgb_ranker": "XGBoost Ranker",
+        "catboost": "CatBoost",
+        "tabpfn": "TabPFN",
+        "tabpfn_3_5": "TabPFN-3.5",
+        "reversal": "Reversal baseline",
+        "momentum": "Momentum baseline",
+        "notebook_baseline": "Original-feature baseline",
+        "benchmark": "Historical benchmark",
+        "historical_benchmark": "Historical benchmark",
+        "equal_weight_benchmark": "Equal-weight benchmark",
+    }.get(name.lower(), name.replace("_", " ").strip())
+
+
+def model_results_table(leaderboard: pd.DataFrame) -> str:
+    """Keep every recorded model, including unresolved comparisons."""
+    if leaderboard.empty or "model" not in leaderboard:
+        return '<p class="muted">No model comparison was recorded.</p>'
+    headers = ["Model", "Return", "Sharpe", "Max drawdown", "Ending NAV", "Status"]
+    rows = []
+    for _, row in leaderboard.iterrows():
+        name = str(row["model"])
+        status = str(row.get("status", "Recorded"))
+        if status.lower() in {"nan", "", "none"}:
+            status = "Recorded"
+        invalid = status.lower() not in {"resolved", "valid", "complete", "recorded", "ok"}
+        if "performance_valid" in row and str(row["performance_valid"]).lower() in {"false", "0"}:
+            invalid = True
+            if status.lower() in {"resolved", "valid", "complete", "recorded", "ok"}:
+                status = "Invalid"
+        values = [
+            number(row.get("cumulative_net_return"), 1, True),
+            number(row.get("sharpe_net"), 2),
+            number(row.get("max_drawdown_net"), 1, True),
+        ]
+        ending = number(row.get("final_net_equity"), 0)
+        values.append("$" + ending if ending != "—" else "—")
+        if invalid:
+            values = ["—"] * 4
+        failure = row.get("failure", "")
+        detail = "" if pd.isna(failure) else str(failure)
+        status_html = f'<span title="{escape(detail)}">{escape(status.replace("_", " ").capitalize())}</span>'
+        css = ' class="highlight"' if name.lower() in {"ensemble", "blend"} else ""
+        cells = [f'<th scope="row">{escape(model_name(name))}</th>']
+        cells += [f"<td>{value}</td>" for value in values]
+        cells += [f"<td>{status_html}</td>"]
+        rows.append(f"<tr{css}>{''.join(cells)}</tr>")
+    head = "".join(f'<th scope="col">{header}</th>' for header in headers)
+    return f'<div class="table-wrap"><table><thead><tr>{head}</tr></thead><tbody>{"".join(rows)}</tbody></table></div>'
+
+
+def model_comparison_chart(
+    model_daily: pd.DataFrame, directory: Path, *, leaderboard: pd.DataFrame | None = None,
+    initial_capital: float | None = None, cost_free: bool = False,
+) -> str:
+    """Compare actual resolved NAV paths, never substituting a missing result."""
+    frame = dates_frame(model_daily)
+    if frame.empty or not {"model", "net_nav"}.issubset(frame.columns):
+        return empty_chart("No resolved model comparison paths were recorded.")
+    valid_names = None
+    if leaderboard is not None and not leaderboard.empty and "model" in leaderboard:
+        valid_names = set()
+        for _, row in leaderboard.iterrows():
+            status = str(row.get("status", "resolved")).lower()
+            valid = status in {"resolved", "valid", "complete", "recorded", "ok", "nan"}
+            valid &= str(row.get("performance_valid", True)).lower() not in {"false", "0"}
+            if valid:
+                valid_names.add(str(row["model"]))
+    palette = ["#437e72", "#7d79a5", "#bf7048", "#538aa0", "#ae8c35", "#9c6489", "#778942", "#557d9d"]
+    fig, ax = plt.subplots(figsize=(9.7, 3.5))
+    groups = list(frame.groupby("model", sort=False))
+    # Draw the blend last so coincident paths still retain the selected forecast.
+    groups.sort(key=lambda pair: str(pair[0]).lower() in {"ensemble", "blend"})
+    count = 0
+    for name, group in groups:
+        if valid_names is not None and str(name) not in valid_names:
+            continue
+        if "performance_valid" in group and group["performance_valid"].astype(str).str.lower().isin(["false", "0"]).any():
+            continue
+        if "status" in group and not group["status"].astype(str).str.lower().isin(["resolved", "valid", "complete", "recorded", "ok", "nan"]).all():
+            continue
+        values = finite_series(group, "net_nav")
+        if values.empty:
+            continue
+        is_blend = str(name).lower() in {"ensemble", "blend"}
+        is_baseline = str(name).lower() in {"reversal", "momentum", "notebook_baseline"} or "benchmark" in str(name).lower()
+        color = INK if is_blend else palette[count % len(palette)]
+        ax.plot(values["Date"], values["net_nav"] / 1_000_000,
+                color=color, linewidth=2.3 if is_blend else 1.4,
+                linestyle="--" if is_baseline else "-", alpha=1 if is_blend else 0.88,
+                label=model_name(name), zorder=4 if is_blend else 2)
+        count += 1
+    if not count:
+        plt.close(fig)
+        return empty_chart("No complete model comparison paths were recorded.")
+    baseline = float(initial_capital) / 1_000_000 if initial_capital is not None else 1.0
+    ax.axhline(baseline, color="#bcc9be", linewidth=0.7, linestyle=":")
+    ax.set_ylabel("Portfolio NAV ($m)")
+    style_axes(ax)
+    ax.legend(loc="lower left", bbox_to_anchor=(0, 1.02), ncol=3, frameon=False,
+              fontsize=9, labelcolor=INK, columnspacing=1.6, handlelength=2.5)
+    format_dates(fig, ax)
+    return save_chart(fig, directory, "model_comparison",
+                      "Individual model, blend and baseline portfolio NAV paths; costs excluded" if cost_free
+                      else "Individual model, blend and baseline portfolio NAV paths after costs")
+
 def render_showcase(
     report_dir: Path, summary: dict, leaderboard: pd.DataFrame, daily: pd.DataFrame,
     top_predictions: pd.DataFrame, feature_importance: pd.DataFrame,
+    model_daily: pd.DataFrame | None = None,
 ) -> Path:
-    """Write a simple model scheme and strategy-results dashboard."""
+    """Write a model scheme and every recorded strategy comparison."""
     report_dir = Path(report_dir)
     report_dir.mkdir(parents=True, exist_ok=True)
     frame = dates_frame(daily)
@@ -378,18 +494,41 @@ def render_showcase(
     cost_free = costs_are_zero(evaluation)
     nav_frame = frame if {"gross_nav", "net_nav"}.issubset(frame.columns) else portfolio_frame
     strategy_equity = strategy_equity_chart(nav_frame, report_dir, initial_capital=evaluation.get("initial_capital"), cost_free=cost_free)
+    if model_daily is None:
+        model_path = report_dir / "model_daily.csv"
+        model_daily = pd.read_csv(model_path) if model_path.exists() else pd.DataFrame()
+    comparison = model_comparison_chart(model_daily, report_dir, leaderboard=leaderboard,
+                                        initial_capital=evaluation.get("initial_capital"), cost_free=cost_free)
+    comparison_table = model_results_table(leaderboard)
+    external_notes = []
+    for name, details in summary.get("external_models", {}).items():
+        if not isinstance(details, dict):
+            continue
+        context = compact(details.get("context_rows"))
+        if details.get("status") != "complete":
+            explanation = details.get("reason", "A complete test comparison is not available.")
+            external_notes.append(f'{escape(model_name(name))}: {escape(explanation)} '
+                                  f'Training context: {context} rows. Full-test performance is not measured.')
+        else:
+            external_notes.append(f'{escape(model_name(name))} is a separate API candidate with a fixed {context}-row training context; '
+                                  'it is not included in the frozen blend.')
+    external_note = ('<p class="comparison-note">' + " ".join(external_notes)
+                     + ' <a href="https://github.com/Simon666Z/financial-engineering-club-fall26/blob/SimonResearch/docs/tabpfn.md">TabPFN experiment details</a>.</p>') if external_notes else ""
     training = summary.get("training", {})
     selected = selected_metrics(summary, leaderboard)
     weights = training.get("selected_weights", {}) if isinstance(training, dict) else {}
-    names = {
-        "elastic_net": "Elastic Net",
-        "xgb_regression": "XGBoost regression",
-        "xgb_ranker": "XGBoost Ranker",
-        "catboost": "CatBoost",
-    }
+    candidate_names = list(training.get("candidate_params", {}))
+    if not candidate_names:
+        candidate_names = ["elastic_net", "xgb_regression", "xgb_ranker", "catboost"]
+    if "model" in leaderboard:
+        for name in leaderboard["model"].astype(str):
+            if name not in candidate_names and name not in {"ensemble", "blend", "reversal", "momentum", "notebook_baseline", *summary.get("external_models", {})} and not any(
+                label in name.lower() for label in ["baseline", "benchmark"]):
+                candidate_names.append(name)
+    candidate_cards = "".join(f'<div class="candidate">{escape(model_name(name))}</div>' for name in candidate_names)
     active = [(name, weight) for name, weight in weights.items() if float(weight) > 0] if isinstance(weights, dict) else []
     if active:
-        selected_name = "<br>".join(escape(names.get(name, name)) for name, _ in active)
+        selected_name = "<br>".join(escape(model_name(name)) for name, _ in active)
         selected_weight = " · ".join(number(weight, 0, True) for _, weight in active)
     else:
         selected_name, selected_weight = "Selected forecast", "See saved model"
@@ -414,8 +553,14 @@ def render_showcase(
     input_caption = "Research-backed price / volume signals."
     if feature_counts["total"] is not None:
         input_caption += f' {feature_counts["total"]} model inputs.'
-    is_hold_strategy = evaluation.get("strategy_name") == "rank_hold_long_short" or {"gross_nav", "net_nav"}.issubset(frame.columns)
+    is_hold_strategy = str(evaluation.get("strategy_name", "")).startswith("rank_hold") or {"gross_nav", "net_nav"}.issubset(frame.columns)
     top_k = compact(evaluation.get("top_k"))
+    entry_k = compact(evaluation.get("entry_k", 20))
+    exit_k = compact(evaluation.get("exit_k", 100))
+    try:
+        long_fraction = float(evaluation.get("long_fraction", 0.5))
+    except (TypeError, ValueError):
+        long_fraction = 0.5
     cost = number(evaluation.get("cost_bps"), 0)
     sessions = compact(evaluation.get("aggregate_resolved_dates", len(portfolio_frame)))
     cards = []
@@ -461,11 +606,19 @@ def render_showcase(
     excluded = int(evaluation.get("aggregate_excluded_unresolved_dates", 0) or 0)
     conditional = f" Results use common resolved sessions; {excluded:,} unresolved sessions are excluded." if excluded else ""
     if is_hold_strategy:
-        strategy_title = "Top 20 long<br>Bottom 20 short"
-        strategy_detail = "Hold while top / bottom 100.<br>Holdings can exceed 20 per side."
-        strategy_caption = ("Prior close ranks → next-session adjusted OHLC4 fills. Deploy free cash 50% long / 50% short, "
-                            "adding to top / bottom 20; hold while top / bottom 100. Exit proceeds become available at the fill-day close. "
-                            f"Short proceeds and 100% entry collateral stay segregated. {cost} bps commission per side.")
+        if long_fraction == 1:
+            strategy_title = f"Long only<br>Top {entry_k}"
+            strategy_detail = f"Hold while top {exit_k}.<br>Invest all free cash."
+            strategy_caption = (f"Prior close ranks → next-session adjusted OHLC4 fills. Invest all available free cash across the top {entry_k}, "
+                                f"adding to existing positions; retain holdings while in the top {exit_k}. Threshold exits execute next session. "
+                                f"Exit cash is available at that fill-day close for following-session entries. {cost} bps commission per side.")
+        else:
+            strategy_title = f"Top {entry_k} long<br>Bottom {entry_k} short"
+            strategy_detail = f"Hold while top / bottom {exit_k}.<br>Holdings can exceed {entry_k} per side."
+            strategy_caption = (f"Prior close ranks → next-session adjusted OHLC4 fills. Deploy free cash {number(long_fraction, 0, True)} long / "
+                                f"{number(1 - long_fraction, 0, True)} short, adding to top / bottom {entry_k}; hold while top / bottom {exit_k}. "
+                                "Exit proceeds become available at the fill-day close. Short proceeds and 100% entry collateral stay segregated. "
+                                f"{cost} bps commission per side.")
         proxy_note = "OHLC4 is a fill proxy. Adjusted prices and units provide synthetic corporate-action accounting; actual cash dividends are not modeled."
         if "annual_borrow_bps" in evaluation:
             proxy_note += f" Borrow fee: {number(evaluation['annual_borrow_bps'], 0)} bps/year."
@@ -494,26 +647,133 @@ def render_showcase(
 <style>
 :root{{--bg:#f1f2eb;--paper:#fbfaf6;--ink:#233a33;--muted:#69756e;--green:#216c58;--line:#dce1d5;--warm:#ac733c}}
 *{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:var(--ink);font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:14px;line-height:1.5}}
-main{{max-width:1100px;margin:auto;padding:26px 28px 30px}}header{{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:20px}}.brand{{font-size:13px;font-weight:650}}.brand span{{font-weight:400;color:var(--muted);margin-left:8px}}.period{{font-size:12px;color:var(--muted)}}section{{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:22px 24px;margin-bottom:18px}}h1,h2{{margin:0;font-size:21px;font-weight:600;letter-spacing:-.02em}}.section-head{{display:flex;justify-content:space-between;align-items:baseline;gap:16px;margin-bottom:18px}}.section-head p{{margin:0;color:var(--muted);font-size:12px}}.scheme{{display:grid;grid-template-columns:1fr 16px 1.45fr 16px .88fr 16px 1fr 16px 1.10fr;gap:8px;align-items:stretch}}.node{{border:1px solid var(--line);border-radius:7px;padding:15px 13px;display:flex;flex-direction:column;justify-content:center;min-height:156px}}.node-title{{font-size:12px;font-weight:600;color:var(--muted);margin:0 0 9px}}.node strong{{font-size:16px;font-weight:600;line-height:1.3}}.node p{{font-size:12px;line-height:1.5;color:var(--muted);margin:8px 0 0}}.arrow{{align-self:center;text-align:center;color:#87948b;font-size:22px}}.candidates{{display:grid;grid-template-columns:1fr 1fr;gap:7px}}.candidate{{font-size:12px;line-height:1.4;border:1px solid var(--line);padding:7px 8px;border-radius:5px;background:#f4f5ef;display:flex;align-items:center;min-height:46px}}.selected{{background:#edf3e9;border-color:#b9cdbb}}.selected strong{{color:var(--green)}}.weight{{display:inline-block;align-self:flex-start;font-size:12px;color:var(--green);margin-top:9px;font-weight:600}}.metrics{{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);border-radius:7px;margin-bottom:16px}}.metrics.three{{grid-template-columns:repeat(3,1fr)}}.metric{{padding:14px 18px;border-right:1px solid var(--line)}}.metric:last-child{{border-right:0}}.metric span{{font-size:12px;color:var(--muted);display:block}}.metric strong{{font-weight:500;font-size:28px;letter-spacing:-.03em;display:block;margin-top:4px}}.chart svg{{display:block;width:100%;height:auto}}.chart-empty{{padding:80px 20px;text-align:center;color:var(--muted)}}.capital{{display:flex;gap:24px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin:-3px 0 16px}}.capital b{{color:var(--ink);font-weight:600}}.proxy{{font-size:12px;color:var(--muted);line-height:1.5;margin:8px 0 0}}.strategy{{font-size:12px;line-height:1.6;color:var(--muted);margin:12px 0 0}}.outcome{{margin:11px 0 0;font-size:13px;color:#7e572e}}footer{{font-size:12px;color:var(--muted);margin:3px 0 0}}
+main{{max-width:1100px;margin:auto;padding:26px 28px 30px}}header{{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:20px}}.brand{{font-size:13px;font-weight:650}}.brand span{{font-weight:400;color:var(--muted);margin-left:8px}}.period{{font-size:12px;color:var(--muted)}}section{{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:22px 24px;margin-bottom:18px}}h1,h2{{margin:0;font-size:21px;font-weight:600;letter-spacing:-.02em}}.section-head{{display:flex;justify-content:space-between;align-items:baseline;gap:16px;margin-bottom:18px}}.section-head p{{margin:0;color:var(--muted);font-size:12px}}.scheme{{display:grid;grid-template-columns:1fr 16px 1.45fr 16px .88fr 16px 1fr 16px 1.10fr;gap:8px;align-items:stretch}}.node{{border:1px solid var(--line);border-radius:7px;padding:15px 13px;display:flex;flex-direction:column;justify-content:center;min-height:156px}}.node-title{{font-size:12px;font-weight:600;color:var(--muted);margin:0 0 9px}}.node strong{{font-size:16px;font-weight:600;line-height:1.3}}.node p{{font-size:12px;line-height:1.5;color:var(--muted);margin:8px 0 0}}.arrow{{align-self:center;text-align:center;color:#87948b;font-size:22px}}.candidates{{display:grid;grid-template-columns:1fr 1fr;gap:7px}}.candidate{{font-size:12px;line-height:1.4;border:1px solid var(--line);padding:7px 8px;border-radius:5px;background:#f4f5ef;display:flex;align-items:center;min-height:46px}}.selected{{background:#edf3e9;border-color:#b9cdbb}}.selected strong{{color:var(--green)}}.weight{{display:inline-block;align-self:flex-start;font-size:12px;color:var(--green);margin-top:9px;font-weight:600}}.metrics{{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);border-radius:7px;margin-bottom:16px}}.metrics.three{{grid-template-columns:repeat(3,1fr)}}.metric{{padding:14px 18px;border-right:1px solid var(--line)}}.metric:last-child{{border-right:0}}.metric span{{font-size:12px;color:var(--muted);display:block}}.metric strong{{font-weight:500;font-size:28px;letter-spacing:-.03em;display:block;margin-top:4px}}.chart svg{{display:block;width:100%;height:auto}}.chart-empty{{padding:80px 20px;text-align:center;color:var(--muted)}}.capital{{display:flex;gap:24px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin:-3px 0 16px}}.capital b{{color:var(--ink);font-weight:600}}.proxy{{font-size:12px;color:var(--muted);line-height:1.5;margin:8px 0 0}}.strategy{{font-size:12px;line-height:1.6;color:var(--muted);margin:12px 0 0}}.outcome{{margin:11px 0 0;font-size:13px;color:#7e572e}}footer{{font-size:12px;color:var(--muted);margin:3px 0 0}}.result-label{{font-size:12px;font-weight:600;color:var(--green);margin:-4px 0 12px}}.table-wrap{{overflow-x:auto;margin-top:10px}}table{{border-collapse:collapse;width:100%;font-size:12px;font-variant-numeric:tabular-nums}}th,td{{padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap;text-align:right}}th:first-child{{text-align:left}}thead th{{font-size:12px;color:var(--muted);font-weight:500}}tbody th{{font-weight:500}}.highlight{{background:#edf3e9}}.highlight th,.highlight td{{font-weight:650}}.comparison-note{{font-size:12px;color:var(--muted);margin:10px 0 0}}
 @media(max-width:900px){{.scheme{{grid-template-columns:1fr 1.25fr 1fr;gap:12px}}.arrow{{display:none}}.node{{min-height:130px}}.section-head{{align-items:flex-start;flex-direction:column;gap:4px}}}}
 @media(max-width:600px){{main{{padding:18px 14px}}section{{padding:18px 16px}}header{{align-items:flex-start;flex-direction:column;gap:5px}}.scheme{{grid-template-columns:1fr 1fr}}.node{{padding:12px;min-height:125px}}.candidates{{grid-template-columns:1fr}}.node.candidate-node{{grid-row:span 2}}.metrics{{grid-template-columns:1fr 1fr}}.metric:nth-child(2){{border-right:0}}.metric:nth-child(-n+2){{border-bottom:1px solid var(--line)}}.metric strong{{font-size:25px}}.metrics.three .metric:nth-child(2){{border-right:1px solid var(--line)}}.metrics.three .metric:nth-child(-n+2){{border-bottom:0}}.metrics.three .metric{{padding:12px}}}}
 </style></head><body><main>
 <header><div class="brand">FE CLUB <span>/ SimonResearch</span></div><div class="period">Train {train_period} · Validate {validation_period} · Test {test_period}</div></header>
-<section aria-labelledby="scheme-title"><div class="section-head"><h1 id="scheme-title">Model scheme</h1><p>The four candidates are trained; validation selects the forecast.</p></div>
+<section aria-labelledby="scheme-title"><div class="section-head"><h1 id="scheme-title">Model scheme</h1><p>Validation selects forecast settings and blend weights.</p></div>
 <div class="scheme" role="list" aria-label="Model and portfolio workflow">
 <div class="node" role="listitem"><div class="node-title">Inputs</div><strong>{input_label}</strong><p>{input_caption}</p></div>
 <div class="arrow" aria-hidden="true">→</div>
-<div class="node candidate-node" role="listitem"><div class="node-title">Trained candidates</div><div class="candidates"><div class="candidate">Elastic Net</div><div class="candidate">XGBoost regression</div><div class="candidate">XGBoost Ranker</div><div class="candidate">CatBoost</div></div><p>Next-day return ranks<br><span>Ranker learns return deciles.</span></p></div>
+<div class="node candidate-node" role="listitem"><div class="node-title">Trained candidates</div><div class="candidates">{candidate_cards}</div><p>Next-day return ranks<br><span>Ranker learns return deciles.</span></p></div>
 <div class="arrow" aria-hidden="true">→</div>
-<div class="node" role="listitem"><div class="node-title">Validation</div><strong>2023</strong><p>Select model settings and forecast weights.</p></div>
+<div class="node" role="listitem"><div class="node-title">Validation</div><strong>{validation_period}</strong><p>Select model settings and forecast weights.</p></div>
 <div class="arrow" aria-hidden="true">→</div>
 <div class="node selected" role="listitem"><div class="node-title">{selected_label}</div><strong>{selected_name}</strong><span class="weight">{selected_weight}</span></div>
 <div class="arrow" aria-hidden="true">→</div>
 <div class="node" role="listitem"><div class="node-title">Trading strategy</div><strong>{strategy_title}</strong><p>{strategy_detail}</p></div>
 </div></section>
-<section aria-labelledby="results-title"><div class="section-head"><h2 id="results-title">{test_period} backtest</h2><p>{sessions} trading sessions · Selected model strategy</p></div>{capital}<div class="{metrics_class}">{''.join(cards)}</div><div class="chart">{strategy_equity}</div><p class="strategy">{strategy_caption}{conditional}</p><p class="outcome">{outcome}</p><p class="proxy">{proxy_note}</p></section>
+<section aria-labelledby="results-title"><div class="section-head"><h2 id="results-title">{test_period} backtest</h2><p>{sessions} trading sessions · Frozen blend strategy</p></div><p class="result-label">Blend / selected forecast</p>{capital}<div class="{metrics_class}">{''.join(cards)}</div><div class="chart">{comparison}</div>{comparison_table}<p class="comparison-note">Every model and baseline uses the recorded trading policy. Blank metrics mean an incomplete, unresolved or invalid performance result; those paths are omitted from the chart. Solid lines: trained models and blend. Dashed lines: baselines / benchmarks.</p>{external_note}<p class="strategy">{strategy_caption}{conditional}</p><p class="outcome">{outcome}</p><p class="proxy">{proxy_note}</p></section>
 <footer>{footer}</footer>
 </main></body></html>'''
     path = report_dir / "index.html"
     path.write_text(document, encoding="utf-8")
     return path
+
+
+EXTERNAL_CANDIDATE = "tabpfn_3_5"
+EXTERNAL_FILES = (
+    "reports/tabpfn/status.json", "reports/tabpfn/run.json",
+    "reports/tabpfn/batch_causality.json", "reports/tabpfn/test_predictions.parquet",
+    "reports/tabpfn/validation_predictions.parquet",
+)
+
+
+def external_candidate_inputs(root: Path) -> dict[str, str]:
+    """Fingerprint local optional inputs so cached reports notice status changes."""
+    return {relative: hashlib.sha256((Path(root) / relative).read_bytes()).hexdigest()
+            for relative in EXTERNAL_FILES if (Path(root) / relative).is_file()}
+
+
+def load_external_candidate(
+    root: Path, *, manifest: dict, feature_names: list[str], expected_keys: pd.DataFrame,
+) -> tuple[dict, pd.DataFrame | None]:
+    """Accept only a verified complete candidate, otherwise retain a status row.
+
+    All provider work is explicit in run_tabpfn.py. Dashboard generation merely
+    reads saved artifacts; it never uploads data, charges tokens or changes the
+    core forecast table or blend.
+    """
+    root = Path(root)
+    status_path, run_path = root / EXTERNAL_FILES[0], root / EXTERNAL_FILES[1]
+    if not status_path.exists() and not run_path.exists():
+        return {}, None
+    status = json.loads(status_path.read_text()) if status_path.exists() else {}
+    metadata = json.loads(run_path.read_text()) if run_path.exists() else {}
+    if metadata.get("status") != "complete" or metadata.get("mode") != "full":
+        result = {
+            "status": status.get("status", "incomplete"),
+            "reason": status.get("reason", "No complete, verified TabPFN test run is available."),
+            "context_rows": status.get("context_rows", metadata.get("context_rows")),
+            "model_path": status.get("model_path", metadata.get("model_path")),
+            "n_estimators": status.get("n_estimators", metadata.get("n_estimators")),
+            "performance_valid": False,
+        }
+        # A status-only file cannot authorize a complete portfolio estimate.
+        if result["status"] == "complete":
+            result["status"] = "incomplete"
+        return result, None
+
+    def require(condition: bool, message: str) -> None:
+        if not condition:
+            raise ValueError("Invalid external TabPFN candidate: " + message)
+
+    require(metadata.get("candidate_key") == EXTERNAL_CANDIDATE, "wrong candidate key")
+    require(metadata.get("alpha_data_sha256") == manifest["sha256"], "alpha snapshot mismatch")
+    require(metadata.get("raw_snapshot_sha256") == manifest["raw_snapshot_sha256"], "raw snapshot mismatch")
+    require(metadata.get("feature_names") == list(feature_names), "feature schema mismatch")
+    context = metadata.get("training_context", {})
+    require(context.get("feature_names") == list(feature_names), "context schema mismatch")
+    require(context.get("transforms_before_sampling") is True, "unverified feature transform timing")
+    require(context.get("train_end") == metadata.get("train_end") and context.get("train_label_end") == metadata.get("train_label_end"), "context training boundaries mismatch")
+    require(context.get("alpha_data_sha256") == manifest["sha256"] and context.get("raw_snapshot_sha256") == manifest["raw_snapshot_sha256"], "context snapshot mismatch")
+    require(pd.Timestamp(metadata.get("train_end")) <= pd.Timestamp("2022-12-29"), "training extends into validation")
+    require(pd.Timestamp(metadata.get("train_label_end")) <= pd.Timestamp("2022-12-30"), "training label crosses its boundary")
+    require(metadata.get("test_labels_used") is False and metadata.get("blend_changed") is False, "test-label or blend policy violated")
+    require(metadata.get("model_path") == "v3.5_default" and metadata.get("n_estimators") == 4, "model configuration mismatch")
+    require(metadata.get("context_rows") == context.get("train_rows") and int(metadata.get("context_rows", 0)) > 0, "context count mismatch")
+    for relative, expected in context.get("prepared_alpha_sha256", {}).items():
+        require(relative in {"data/processed/alpha_model_data.parquet", "data/processed/alpha_panel.parquet", "data/processed/alpha_data_manifest.json"}, "unexpected prepared artifact")
+        path = root / relative
+        require(path.exists() and hashlib.sha256(path.read_bytes()).hexdigest() == expected, "prepared artifact changed")
+    require(len(context.get("prepared_alpha_sha256", {})) == 3, "missing prepared checksums")
+    proof_path = root / "reports/tabpfn/batch_causality.json"
+    require(proof_path.exists(), "missing batch-independence proof")
+    require(hashlib.sha256(proof_path.read_bytes()).hexdigest() == metadata.get("batch_independence_proof_sha256"), "proof checksum mismatch")
+    proof = json.loads(proof_path.read_text())
+    require(proof == metadata.get("batch_independence_proof"), "proof metadata mismatch")
+    require(proof.get("status") == "passed" and proof.get("ranking_identical") is True, "batch-independence diagnostic failed")
+    require(proof.get("input_fingerprint") == metadata.get("input_fingerprint"), "proof uses a different input context")
+    require(proof.get("fitted_train_set_id") == metadata.get("fitted_train_set_id"), "proof uses a different provider fit")
+    require(proof.get("feature_names") == list(feature_names) and proof.get("model_config") == metadata.get("model_config"), "proof uses a different schema or model")
+    try:
+        tolerance = float(proof["tolerance"])
+        differences = [float(proof[key]) for key in ["max_abs_date_alone", "max_abs_future_mutation"]]
+        require(0 <= tolerance <= 1e-6 and all(np.isfinite(value) and 0 <= value <= tolerance for value in differences), "proof tolerance or differences invalid")
+    except (KeyError, TypeError, ValueError) as error:
+        raise ValueError("Invalid external TabPFN candidate: malformed numeric proof") from error
+    hashes = metadata.get("output_sha256", {})
+    for name in ["test_predictions.parquet", "validation_predictions.parquet"]:
+        path = root / "reports/tabpfn" / name
+        require(path.exists() and hashlib.sha256(path.read_bytes()).hexdigest() == hashes.get(name), "forecast checksum mismatch")
+    forecast = pd.read_parquet(root / "reports/tabpfn/test_predictions.parquet")
+    require({"Date", "Ticker", "prediction"}.issubset(forecast), "missing forecast columns")
+    forecast = forecast[["Date", "Ticker", "prediction"]].copy()
+    forecast["Date"] = pd.to_datetime(forecast["Date"], errors="coerce")
+    forecast["prediction"] = pd.to_numeric(forecast["prediction"], errors="coerce")
+    require(not forecast[["Date", "Ticker"]].isna().any().any() and not forecast.duplicated(["Date", "Ticker"]).any(), "invalid or duplicate forecast keys")
+    require(np.isfinite(forecast["prediction"]).all(), "nonfinite forecasts")
+    keys = expected_keys[["Date", "Ticker"]].copy()
+    keys["Date"] = pd.to_datetime(keys["Date"])
+    require(not keys.duplicated(["Date", "Ticker"]).any(), "duplicate expected test keys")
+    coverage = keys.merge(forecast, on=["Date", "Ticker"], how="outer", indicator=True, validate="one_to_one")
+    require(len(coverage) == len(keys) and coverage["_merge"].eq("both").all(), "incomplete or extra test coverage")
+    return {
+        "status": "complete", "context_rows": metadata["context_rows"],
+        "model_path": metadata["model_path"], "n_estimators": metadata["n_estimators"],
+        "alpha_data_sha256": metadata["alpha_data_sha256"], "raw_snapshot_sha256": metadata["raw_snapshot_sha256"],
+        "input_fingerprint": metadata["input_fingerprint"], "train_end": metadata["train_end"],
+        "train_label_end": metadata["train_label_end"], "performance_valid": True,
+        "blend_inclusion": False,
+    }, forecast.rename(columns={"prediction": EXTERNAL_CANDIDATE})

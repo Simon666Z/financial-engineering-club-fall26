@@ -41,7 +41,7 @@ from src.data.alpha import ALPHA_INPUTS, ALPHA_PATHS, load_alpha_data
 from src.data.preparation import FEATURES
 from src.data.showcase import load_showcase_data, sha256_file
 from src.models.showcase import COMPONENTS, train_showcase
-from src.reporting.showcase import render_showcase
+from src.reporting.showcase import EXTERNAL_CANDIDATE, external_candidate_inputs, load_external_candidate, render_showcase
 
 
 def clean_json(value):
@@ -84,7 +84,7 @@ def print_result(summary, path):
     print(f"Resolved sessions: {metrics['aggregate_resolved_dates']}/{metrics['trading_dates']}; costs: {metrics['cost_bps']:g} bps per side.", flush=True)
 
 
-def verify_frozen_files(summary):
+def verify_frozen_files(summary, *, include_external=True):
     """Check the saved report against its raw, prepared, model and forecast inputs."""
     manifest = summary['dataset']
     checks = dict(zip(manifest['raw_snapshot_paths'], [manifest['prices_sha256'], manifest['constituents_sha256']]))
@@ -96,6 +96,8 @@ def verify_frozen_files(summary):
     baseline = summary.get('baseline_reference') or {}
     if baseline.get('model_sha256'):
         checks['models/showcase/bundle.joblib'] = baseline['model_sha256']
+    if include_external:
+        checks.update(summary.get('external_input_sha256', {}))
     for relative, expected in checks.items():
         path = ROOT / relative
         if not path.exists() or sha256_file(path) != expected:
@@ -126,16 +128,17 @@ def main():
     config_path = ROOT / 'config/rank_hold.json'
     config = json.loads(config_path.read_text())
     config_hash = sha256_file(config_path)
+    external_hashes = external_candidate_inputs(ROOT) if args.feature_set == 'alpha' else {}
     source_files = ['src/data/preparation.py', 'src/data/showcase.py', 'src/data/rank_hold.py',
                     'src/models/showcase.py', 'src/backtests/showcase.py', 'src/backtests/rank_hold.py',
                     'scripts/run_showcase.py', 'src/reporting/showcase.py']
     if args.feature_set == 'alpha':
         source_files += ['src/data/alpha.py', 'src/data/alpha_features.py']
     source_hashes = {name: sha256_file(ROOT / name) for name in source_files}
-    required = ['summary.json', 'leaderboard.csv', 'daily.csv', 'top_predictions.csv', 'feature_importance.csv', 'index.html']
+    required = ['summary.json', 'leaderboard.csv', 'daily.csv', 'top_predictions.csv', 'feature_importance.csv', 'index.html', 'model_daily.csv']
     old = json.loads((report / 'summary.json').read_text()) if (report / 'summary.json').exists() else None
     if not any([args.retrain, args.refresh_data, args.rebacktest, args.rebuild_features]) and all((report / name).exists() for name in required):
-        if old.get('strategy_config_sha256') == config_hash and old.get('runtime', {}).get('source_sha256') == source_hashes:
+        if old.get('strategy_config_sha256') == config_hash and old.get('runtime', {}).get('source_sha256') == source_hashes and old.get('external_input_sha256', {}) == external_hashes:
             verify_frozen_files(old)
             print('Reusing the completed frozen experiment. Use --rebacktest for new execution or --retrain for an explicit new fit.', flush=True)
             print_result(old, report / 'index.html')
@@ -149,15 +152,24 @@ def main():
             if name in previous_sources and previous_sources[name] != source_hashes[name] and not args.rebuild_features:
                 raise ValueError('Feature preparation code changed. Use --rebuild-features --retrain for alpha, or --refresh-data for notebook data.')
         if not args.retrain and not args.rebuild_features:
-            verify_frozen_files(old)
+            verify_frozen_files(old, include_external=False)
             if previous_sources.get('src/models/showcase.py', source_hashes['src/models/showcase.py']) != source_hashes['src/models/showcase.py']:
                 raise ValueError('Model code changed. Refit explicitly with --retrain.')
     if old and old.get('evaluation', {}).get('strategy_name') != config['strategy_name']:
-        archive = report / 'archive/intraday-v1'
+        previous_strategy = old.get('evaluation', {}).get('strategy_name', 'unknown')
+        archive_name = 'long-short-v1' if previous_strategy == 'rank_hold_long_short' else f"{previous_strategy}-{old['experiment_id']}"
+        archive = report / 'archive' / archive_name
         archive.mkdir(parents=True, exist_ok=True)
-        for name in [*required, 'RESULTS.md', 'training.json']:
-            if (report / name).exists() and not (archive / name).exists():
-                shutil.copy2(report / name, archive / name)
+        for source in report.iterdir():
+            if source.name == 'archive':
+                continue
+            destination = archive / source.name
+            if destination.exists():
+                continue
+            if source.is_dir():
+                shutil.copytree(source, destination)
+            elif source.is_file():
+                shutil.copy2(source, destination)
     if args.feature_set == 'alpha':
         panel, data, manifest = load_alpha_data(ROOT, rebuild=args.rebuild_features, refresh=args.refresh_data)
     elif not args.refresh_data and all((processed / name).exists() for name in prepared_names):
@@ -235,14 +247,19 @@ def main():
     quote_panel = load_rank_hold_prices(panel, ROOT)
     parameters = {name: config[name] for name in ['initial_capital', 'entry_k', 'exit_k', 'long_fraction', 'cost_bps', 'allow_additions', 'exit_unranked', 'start_date']}
     parameters.update(annual_borrow_bps=config['borrow_fee_bps_annual'], price_units=config['execution_price'])
-    leaderboard, evaluations = [], {}
+    external_details, external_forecast = load_external_candidate(ROOT, manifest=manifest, feature_names=list(bundle.feature_names), expected_keys=splits['test'][['Date', 'Ticker']]) if args.feature_set == 'alpha' else ({}, None)
+    leaderboard, evaluations, daily_comparisons = [], {}, []
     selected_daily = None
     comparison_names = ['ensemble', *COMPONENTS, 'reversal', 'momentum'] + (['notebook_baseline'] if 'notebook_baseline' in predictions else [])
+    if external_forecast is not None:
+        comparison_names.append(EXTERNAL_CANDIDATE)
     for name in comparison_names:
-        print(f'Evaluating {name}: persistent top20 / bottom20 on 2024–2025.', flush=True)
-        ic_summary, ic_daily = score_predictions(panel, predictions[['Date', 'Ticker', name]], prediction_column=name, start_date=config['start_date'])
+        candidate_predictions = external_forecast if name == EXTERNAL_CANDIDATE else predictions
+        scheme = 'top20 long only' if config['long_fraction'] == 1.0 else 'top20 / bottom20'
+        print(f'Evaluating {name}: persistent {scheme} on 2024–2025.', flush=True)
+        ic_summary, ic_daily = score_predictions(panel, candidate_predictions[['Date', 'Ticker', name]], prediction_column=name, start_date=config['start_date'])
         try:
-            evaluation, daily, trades, positions = evaluate_rank_hold(quote_panel, predictions[['Date', 'Ticker', name]], prediction_column=name, **parameters)
+            evaluation, daily, trades, positions = evaluate_rank_hold(quote_panel, candidate_predictions[['Date', 'Ticker', name]], prediction_column=name, **parameters)
         except ValueError as error:
             # Missing held quotes invalidate a comparison, never the selected
             # headline. Do not drop its security or invent a flat return.
@@ -260,6 +277,12 @@ def main():
                 'aggregate_resolved_dates': 0,
             }
             daily, trades, positions = None, None, None
+        if daily is not None:
+            comparison_daily = daily[['Date', 'net_nav', 'net_return', 'gross_nav', 'gross_return']].copy()
+            comparison_daily['model'] = name
+            comparison_daily['performance_valid'] = evaluation.get('performance_valid', False)
+            comparison_daily['status'] = 'resolved' if evaluation.get('performance_valid') else 'invalid'
+            daily_comparisons.append(comparison_daily)
         evaluation.update(ic_summary)
         evaluations[name] = evaluation
         rmse = np.nan
@@ -274,8 +297,21 @@ def main():
             positions.to_parquet(report / 'positions.parquet', index=False)
         leaderboard.append({'model': name, 'rank_ic': evaluation['rank_ic_mean'], 'rank_ic_days': evaluation['rank_ic_scored_dates'], 'rmse_if_return_prediction': rmse, 'initial_capital': evaluation['initial_capital'], 'final_gross_equity': evaluation['final_gross_equity'], 'final_net_equity': evaluation['final_net_equity'], 'cumulative_gross_return': evaluation['gross_cumulative_return'], 'cumulative_net_return': evaluation['net_cumulative_return'], 'sharpe_net': evaluation['annualized_sharpe'], 'max_drawdown_net': evaluation['max_drawdown'], 'resolved_days': evaluation['aggregate_resolved_dates'], 'status': evaluation.get('status', 'resolved'), 'failure': evaluation.get('failure', '')})
         del trades, positions
+    if external_details and external_forecast is None:
+        reason = external_details.get('reason', 'Complete test performance has not been measured.')
+        evaluations[EXTERNAL_CANDIDATE] = {**external_details, 'failure': reason, 'initial_capital': config['initial_capital']}
+        leaderboard.append({
+            'model': EXTERNAL_CANDIDATE, 'rank_ic': np.nan, 'rank_ic_days': 0,
+            'rmse_if_return_prediction': np.nan, 'initial_capital': config['initial_capital'],
+            'final_gross_equity': np.nan, 'final_net_equity': np.nan,
+            'cumulative_gross_return': np.nan, 'cumulative_net_return': np.nan,
+            'sharpe_net': np.nan, 'max_drawdown_net': np.nan, 'resolved_days': 0,
+            'status': external_details['status'], 'failure': reason, 'performance_valid': False,
+        })
     board = pd.DataFrame(leaderboard)
     selected_daily.to_csv(report / 'daily.csv', index=False)
+    model_daily = pd.concat(daily_comparisons, ignore_index=True)
+    model_daily.to_csv(report / 'model_daily.csv', index=False)
     board.to_csv(report / 'leaderboard.csv', index=False)
     latest = predictions.loc[predictions['Date'].eq(predictions['Date'].max())].copy()
     latest['disagreement'] = latest[list(COMPONENTS)].std(axis=1)
@@ -286,12 +322,13 @@ def main():
     importance = feature_importance(bundle)
     importance.to_csv(report / 'feature_importance.csv', index=False)
     packages = {name: importlib.metadata.version(name) for name in ['numpy', 'pandas', 'scikit-learn', 'xgboost', 'catboost', 'yfinance', 'matplotlib']}
-    experiment_id = hashlib.sha256(json.dumps({'dataset': manifest['sha256'], 'model': model_hash, 'config': config_hash, 'source': source_hashes}, sort_keys=True).encode()).hexdigest()[:12]
+    experiment_id = hashlib.sha256(json.dumps({'dataset': manifest['sha256'], 'model': model_hash, 'config': config_hash, 'source': source_hashes, 'external_inputs': external_hashes}, sort_keys=True).encode()).hexdigest()[:12]
     summary = {
         'experiment_id': experiment_id, 'generated_at': datetime.now(ZoneInfo('America/Chicago')).isoformat(),
         'dataset': manifest, 'prepared_sha256': prepared_hashes, 'splits': split_stats, 'training': training,
         'strategy_config': config, 'strategy_config_sha256': config_hash,
         'feature_set': args.feature_set, 'baseline_reference': baseline_reference,
+        'external_input_sha256': external_hashes, 'external_models': {EXTERNAL_CANDIDATE: external_details} if external_details else {},
         'model_artifact_path': str(fitted_path.relative_to(ROOT)), 'predictions_artifact_path': str(prediction_path.relative_to(ROOT)),
         'model_sha256': model_hash, 'predictions_sha256': sha256_file(prediction_path),
         'evaluation': evaluations['ensemble'], 'comparison_evaluations': evaluations,
@@ -301,9 +338,9 @@ def main():
             'model_selection': 'Four fixed model configurations; 2023 RMSE/NDCG chooses stopping iterations, then daily rank IC selects among 12 fixed blends. The selected model is saved before test prediction.',
             'test_policy': 'New feature experiment on a previously viewed 2024–2025 sample. Training and validation select the model; no test performance changes its settings. Saved forecasts are reused for execution-only changes.',
             'predictors': f'{len(input_features)} recorded raw price/volume features and their same-date target-free percentile transforms. Complete trailing windows use only information known at the signal close.',
-            'execution': 'Completed close ranks select next-session top20 long and bottom20 short additions; exits when prior-close own-side rank exceeds100 or is unranked. OHLC4 fills; adjusted-close marks. End positions remain open.',
+            'execution': ('Completed close ranks select next-session top20 long additions; all available free cash funds longs. Exit when prior-close descending rank exceeds100 or is unranked. No shorts.' if config['long_fraction'] == 1.0 else 'Completed close ranks select next-session top20 long and bottom20 short additions; exit when prior-close own-side rank exceeds100 or is unranked.') + ' OHLC4 fills; adjusted-close marks. End positions remain open.',
             'capital': config['capital_policy'],
-            'cost': f"{config['cost_bps']:g} bps each entry/exit, funded within budgets; cash earns zero. Independent gross and net books; with both fees zero, their paths coincide. Borrow fee: {config['borrow_fee_bps_annual']:g} bps/year; shortability assumed.",
+            'cost': f"{config['cost_bps']:g} bps each entry/exit, funded within budgets; cash earns zero. Independent gross and net books; with both fees zero, their paths coincide. {f"Borrow fee: {config['borrow_fee_bps_annual']:g} bps/year; shortability assumed." if config['long_fraction'] < 1 else "All invested capital is in long positions."}",
             'price_basis': 'Raw OHLC4 times Adj Close/Close and adjusted-close marks simulate total-return units. Fixed units embed corporate actions; no extra dividends or split credits. Units are not historical share counts.',
             'signal_units': 'ensemble is a ranking score, not a return. prediction in the latest ranking is a separate 2023-calibrated decimal next-day return estimate.',
             'importance': 'Validation-blend-weighted normalized native importance (absolute standardized coefficients for linear model), combined across raw/rank versions; descriptive, not causal.',
@@ -322,8 +359,11 @@ def main():
             'Comparisons with missing held marks have no portfolio performance estimate; forecast IC remains separately measurable.',
         ],
     }
+    if config['long_fraction'] == 1.0:
+        summary['limitations'] = [item for item in summary['limitations'] if not item.startswith('Short-sale proceeds')]
+        summary['limitations'] = [item.replace('actual dividend cash timing, short dividend obligations and verified split-share inventories', 'actual dividend cash timing and verified split-share inventories') for item in summary['limitations']]
     write_json(report / 'summary.json', summary)
-    path = render_showcase(report, clean_json(summary), board, selected_daily, latest, importance)
+    path = render_showcase(report, clean_json(summary), board, selected_daily, latest, importance, model_daily=model_daily)
     print_result(summary, path)
 
 

@@ -1,0 +1,466 @@
+{
+  "generated_at": "2026-10-09T16:51:34.471608+00:00",
+  "mode": "pilot",
+  "status": "complete",
+  "candidate_key": "tabpfn_3_5",
+  "input_fingerprint": "ec0780092509962dc53c27b7cf51757f3257ad289905ed97fe48d24305a56ff2",
+  "model_config": {
+    "model_path": "v3.5_default",
+    "n_estimators": 4,
+    "random_state": 42,
+    "fit_mode": "fit_preprocessors"
+  },
+  "fitted_train_set_id": "01a12192-0ae9-7381-a277-45ffea63d93c",
+  "feature_names": [
+    "ret_1d",
+    "mom_5d",
+    "mom_20d",
+    "mom_60d",
+    "vol_5d",
+    "vol_20d",
+    "volume_ratio_20d",
+    "range_pct",
+    "intraday_ret",
+    "mom_126_21",
+    "mom_252_21",
+    "high_ratio_252",
+    "dollar_volume_rank_50",
+    "dollar_volume_log_shock_20",
+    "volume_reversal_1d",
+    "max_return_21d",
+    "max5_return_21d",
+    "overnight_ret_1d",
+    "overnight_mom_20d",
+    "intraday_mom_20d",
+    "overnight_mom_60d",
+    "intraday_mom_60d",
+    "overnight_intraday_spread_20d",
+    "overnight_intraday_spread_60d",
+    "ret_1d__csrank",
+    "mom_5d__csrank",
+    "mom_20d__csrank",
+    "mom_60d__csrank",
+    "vol_5d__csrank",
+    "vol_20d__csrank",
+    "volume_ratio_20d__csrank",
+    "range_pct__csrank",
+    "intraday_ret__csrank",
+    "mom_126_21__csrank",
+    "mom_252_21__csrank",
+    "high_ratio_252__csrank",
+    "dollar_volume_rank_50__csrank",
+    "dollar_volume_log_shock_20__csrank",
+    "volume_reversal_1d__csrank",
+    "max_return_21d__csrank",
+    "max5_return_21d__csrank",
+    "overnight_ret_1d__csrank",
+    "overnight_mom_20d__csrank",
+    "intraday_mom_20d__csrank",
+    "overnight_mom_60d__csrank",
+    "intraday_mom_60d__csrank",
+    "overnight_intraday_spread_20d__csrank",
+    "overnight_intraday_spread_60d__csrank"
+  ],
+  "training_context": {
+    "feature_names": [
+      "ret_1d",
+      "mom_5d",
+      "mom_20d",
+      "mom_60d",
+      "vol_5d",
+      "vol_20d",
+      "volume_ratio_20d",
+      "range_pct",
+      "intraday_ret",
+      "mom_126_21",
+      "mom_252_21",
+      "high_ratio_252",
+      "dollar_volume_rank_50",
+      "dollar_volume_log_shock_20",
+      "volume_reversal_1d",
+      "max_return_21d",
+      "max5_return_21d",
+      "overnight_ret_1d",
+      "overnight_mom_20d",
+      "intraday_mom_20d",
+      "overnight_mom_60d",
+      "intraday_mom_60d",
+      "overnight_intraday_spread_20d",
+      "overnight_intraday_spread_60d",
+      "ret_1d__csrank",
+      "mom_5d__csrank",
+      "mom_20d__csrank",
+      "mom_60d__csrank",
+      "vol_5d__csrank",
+      "vol_20d__csrank",
+      "volume_ratio_20d__csrank",
+      "range_pct__csrank",
+      "intraday_ret__csrank",
+      "mom_126_21__csrank",
+      "mom_252_21__csrank",
+      "high_ratio_252__csrank",
+      "dollar_volume_rank_50__csrank",
+      "dollar_volume_log_shock_20__csrank",
+      "volume_reversal_1d__csrank",
+      "max_return_21d__csrank",
+      "max5_return_21d__csrank",
+      "overnight_ret_1d__csrank",
+      "overnight_mom_20d__csrank",
+      "intraday_mom_20d__csrank",
+      "overnight_mom_60d__csrank",
+      "intraday_mom_60d__csrank",
+      "overnight_intraday_spread_20d__csrank",
+      "overnight_intraday_spread_60d__csrank"
+    ],
+    "train_end": "2022-12-29",
+    "train_label_end": "2022-12-30",
+    "transforms_before_sampling": true,
+    "seed": 42,
+    "training_target_units": "Centered same-date next-day adjusted-close return rank in [-1,1]",
+    "train_rows": 20000,
+    "available_train_labeled_rows": 712313,
+    "sampling_policy": "Fixed seed42, approximately equal rowcount pertrainingday; samplewithin eachday onlyafter computingfullobservablecross-sectionalfeatures and supervisedreturnranks.",
+    "raw_snapshot_sha256": "4aa57a8e505bd98a121b59ec0b615ef74ec99183dfdd11e4bf111ee877b36d5c",
+    "alpha_data_sha256": "f23d08a9aa20a2672c7cc0e87df1a58ea181ca24350de4c29bce8d3f761deb3b",
+    "prepared_alpha_sha256": {
+      "data/processed/alpha_model_data.parquet": "b841f715be15b618c7d3bc1022f90466e2dfba5dd3efab40514e3903bef59328",
+      "data/processed/alpha_panel.parquet": "3267f8c53d368e4de867dea9ed32aa0cdbfaf2ff8679fb6f6865aae352036e62",
+      "data/processed/alpha_data_manifest.json": "37c016872e4d2dc82ece2ef4c853c3791bcd0a186e7608be06cee3c75c8663c4"
+    },
+    "feature_source_sha256": "ae60d5f96bdf8975f4fed15dfc32bdf5397a5b667602e1c1a37df38308f301fc",
+    "sha256": {
+      "train_keys.parquet": "2451c56323c3d11f4c5be87b48b1d9e64920ba011e28e17ecb817913c87a2fd6",
+      "validation_keys.parquet": "02e8131eb1d9f6bd817e9650214586af19106c55ae57ecda438d577369b86415",
+      "validation_features.parquet": "5cda27a000159c91e511fa0b58799125f64fd857c98fe954df2ff9023858ad16",
+      "validation_targets.parquet": "4d2e222bc0c02837a0157317e8acc95e3b79bdc1020b67c360e08efb0d789cdd",
+      "train_labels.npy": "03546a00159a22b426a203d12ee77537e17244152d34d1de0458f313cc7aa30e",
+      "train_features.parquet": "aad7052db25b57ab196e61b83746372d2a28a5fd6a0111c39ef90ec72ee5ff25",
+      "test_keys.parquet": "fcb0763dbb7773dcabfab893ef1e42036caada09f1ccbe074476bce1271cf214",
+      "test_features.parquet": "92b4c25a64e5470907744d279c9a2725bc22fe4381803a8810bbb0fefff5befd",
+      "test_targets.parquet": "6f30c297ab2f539aafb2b485d044fd4bcd990b8384d8e81d5d2f105ebabe7db6"
+    }
+  },
+  "alpha_data_sha256": "f23d08a9aa20a2672c7cc0e87df1a58ea181ca24350de4c29bce8d3f761deb3b",
+  "raw_snapshot_sha256": "4aa57a8e505bd98a121b59ec0b615ef74ec99183dfdd11e4bf111ee877b36d5c",
+  "train_rows": 20000,
+  "context_rows": 20000,
+  "train_end": "2022-12-29",
+  "train_label_end": "2022-12-30",
+  "model_path": "v3.5_default",
+  "n_estimators": 4,
+  "prediction_units": "regression score; no predicted-return calibration",
+  "output_sha256": {
+    "pilot_predictions.parquet": "29db86287a6eecfa466726736fd8b0405b292818f38c4029f0e26c948ddfe38e"
+  },
+  "maximum_local_tokens": 40000,
+  "cumulative_reserved_tokens": 34500,
+  "batch_independence_proof": null,
+  "batch_independence_proof_sha256": null,
+  "requests": [
+    {
+      "batch_id": "bd45a801852dc14e164d06eec298ef5ecfa5db4c70e538e975898e7339b777da",
+      "batch": {
+        "split": "pilot",
+        "start": 0,
+        "stop": 490,
+        "rows": 490,
+        "first_date": "2023-01-03",
+        "last_date": "2023-01-03"
+      },
+      "fitted_train_set_id": "01a12192-0ae9-7381-a277-45ffea63d93c",
+      "status": "completed",
+      "started_at": "2026-10-09T16:49:43.416754+00:00",
+      "quoted_tokens": 10000,
+      "reserved_tokens": 11500,
+      "completed_at": "2026-10-09T16:49:46.710022+00:00",
+      "predictions_sha256": "29db86287a6eecfa466726736fd8b0405b292818f38c4029f0e26c948ddfe38e",
+      "provider_request_ids": {},
+      "response_metadata_sha256": "22faae5b1ac72c02aa3bf3281c3dd381e57279ca525efb43e3e462b0ebb8c66c"
+    },
+    {
+      "batch_id": "103571a0882042cc221586bf2cad6e51132cb00ffa5a336d864c2708e10fc875",
+      "batch": {
+        "split": "causality_combined",
+        "start": 0,
+        "stop": 980,
+        "rows": 980,
+        "first_date": "2023-01-03",
+        "last_date": "2023-01-04"
+      },
+      "fitted_train_set_id": "01a12192-0ae9-7381-a277-45ffea63d93c",
+      "status": "completed",
+      "started_at": "2026-10-09T16:49:46.838406+00:00",
+      "quoted_tokens": 10000,
+      "reserved_tokens": 11500,
+      "completed_at": "2026-10-09T16:49:50.259532+00:00",
+      "predictions_sha256": "4d243542b51a940b29dfd33de913db005311fe7ba6689a6cd674abd724fcc8a0",
+      "provider_request_ids": {},
+      "response_metadata_sha256": "06a2fb89fc5720a5cb76a3c880fa18b10ab2c4b1ac4a4a94742e9e171ab59a2b"
+    },
+    {
+      "batch_id": "2974f6139bf9d70cac7bf748aedd2f85ec5d0bfc9c34fa66d551a605f318f130",
+      "batch": {
+        "split": "causality_mutated",
+        "start": 0,
+        "stop": 980,
+        "rows": 980,
+        "first_date": "2023-01-03",
+        "last_date": "2023-01-04"
+      },
+      "fitted_train_set_id": "01a12192-0ae9-7381-a277-45ffea63d93c",
+      "status": "completed",
+      "started_at": "2026-10-09T16:49:50.453876+00:00",
+      "quoted_tokens": 10000,
+      "reserved_tokens": 11500,
+      "completed_at": "2026-10-09T16:49:53.968585+00:00",
+      "predictions_sha256": "8ef183b852b33bde105b10c80dafe19bdae78dba7ed8cbd57093435bf1a12c65",
+      "provider_request_ids": {},
+      "response_metadata_sha256": "6ef3f79882d52125409e8de60ede6fdbd9140c72f8a6772cc8a7f62d7fc57ee4"
+    }
+  ],
+  "quotes_by_test_rows": {
+    "490": {
+      "estimated_cost": 10000,
+      "pricing_version": "quota_v3",
+      "inputs": {
+        "train_rows": 20000,
+        "raw_columns": 48,
+        "test_rows": 490,
+        "model_version": "v3.5",
+        "operation": "predict",
+        "n_estimators": 4,
+        "thinking_effort": null
+      }
+    },
+    "980": {
+      "estimated_cost": 10000,
+      "pricing_version": "quota_v3",
+      "inputs": {
+        "train_rows": 20000,
+        "raw_columns": 48,
+        "test_rows": 980,
+        "model_version": "v3.5",
+        "operation": "predict",
+        "n_estimators": 4,
+        "thinking_effort": null
+      }
+    },
+    "994": {
+      "estimated_cost": 10000,
+      "pricing_version": "quota_v3",
+      "inputs": {
+        "train_rows": 20000,
+        "raw_columns": 48,
+        "test_rows": 994,
+        "model_version": "v3.5",
+        "operation": "predict",
+        "n_estimators": 4,
+        "thinking_effort": null
+      }
+    },
+    "4427": {
+      "estimated_cost": 10000,
+      "pricing_version": "quota_v3",
+      "inputs": {
+        "train_rows": 20000,
+        "raw_columns": 48,
+        "test_rows": 4427,
+        "model_version": "v3.5",
+        "operation": "predict",
+        "n_estimators": 4,
+        "thinking_effort": null
+      }
+    },
+    "9808": {
+      "estimated_cost": 10000,
+      "pricing_version": "quota_v3",
+      "inputs": {
+        "train_rows": 20000,
+        "raw_columns": 48,
+        "test_rows": 9808,
+        "model_version": "v3.5",
+        "operation": "predict",
+        "n_estimators": 4,
+        "thinking_effort": null
+      }
+    },
+    "9820": {
+      "estimated_cost": 10000,
+      "pricing_version": "quota_v3",
+      "inputs": {
+        "train_rows": 20000,
+        "raw_columns": 48,
+        "test_rows": 9820,
+        "model_version": "v3.5",
+        "operation": "predict",
+        "n_estimators": 4,
+        "thinking_effort": null
+      }
+    },
+    "9840": {
+      "estimated_cost": 10000,
+      "pricing_version": "quota_v3",
+      "inputs": {
+        "train_rows": 20000,
+        "raw_columns": 48,
+        "test_rows": 9840,
+        "model_version": "v3.5",
+        "operation": "predict",
+        "n_estimators": 4,
+        "thinking_effort": null
+      }
+    },
+    "9854": {
+      "estimated_cost": 10000,
+      "pricing_version": "quota_v3",
+      "inputs": {
+        "train_rows": 20000,
+        "raw_columns": 48,
+        "test_rows": 9854,
+        "model_version": "v3.5",
+        "operation": "predict",
+        "n_estimators": 4,
+        "thinking_effort": null
+      }
+    },
+    "9860": {
+      "estimated_cost": 10000,
+      "pricing_version": "quota_v3",
+      "inputs": {
+        "train_rows": 20000,
+        "raw_columns": 48,
+        "test_rows": 9860,
+        "model_version": "v3.5",
+        "operation": "predict",
+        "n_estimators": 4,
+        "thinking_effort": null
+      }
+    },
+    "9869": {
+      "estimated_cost": 10000,
+      "pricing_version": "quota_v3",
+      "inputs": {
+        "train_rows": 20000,
+        "raw_columns": 48,
+        "test_rows": 9869,
+        "model_version": "v3.5",
+        "operation": "predict",
+        "n_estimators": 4,
+        "thinking_effort": null
+      }
+    },
+    "9880": {
+      "estimated_cost": 10000,
+      "pricing_version": "quota_v3",
+      "inputs": {
+        "train_rows": 20000,
+        "raw_columns": 48,
+        "test_rows": 9880,
+        "model_version": "v3.5",
+        "operation": "predict",
+        "n_estimators": 4,
+        "thinking_effort": null
+      }
+    },
+    "9912": {
+      "estimated_cost": 10000,
+      "pricing_version": "quota_v3",
+      "inputs": {
+        "train_rows": 20000,
+        "raw_columns": 48,
+        "test_rows": 9912,
+        "model_version": "v3.5",
+        "operation": "predict",
+        "n_estimators": 4,
+        "thinking_effort": null
+      }
+    },
+    "9940": {
+      "estimated_cost": 10000,
+      "pricing_version": "quota_v3",
+      "inputs": {
+        "train_rows": 20000,
+        "raw_columns": 48,
+        "test_rows": 9940,
+        "model_version": "v3.5",
+        "operation": "predict",
+        "n_estimators": 4,
+        "thinking_effort": null
+      }
+    },
+    "9948": {
+      "estimated_cost": 10000,
+      "pricing_version": "quota_v3",
+      "inputs": {
+        "train_rows": 20000,
+        "raw_columns": 48,
+        "test_rows": 9948,
+        "model_version": "v3.5",
+        "operation": "predict",
+        "n_estimators": 4,
+        "thinking_effort": null
+      }
+    },
+    "9960": {
+      "estimated_cost": 10000,
+      "pricing_version": "quota_v3",
+      "inputs": {
+        "train_rows": 20000,
+        "raw_columns": 48,
+        "test_rows": 9960,
+        "model_version": "v3.5",
+        "operation": "predict",
+        "n_estimators": 4,
+        "thinking_effort": null
+      }
+    }
+  },
+  "usage_before": {
+    "daily_tokens_used": 30000,
+    "daily_token_limit": 5000000,
+    "monthly_tokens_used": 30000,
+    "monthly_token_limit": 20000000,
+    "current_usage": 30000,
+    "usage_limit": 20000000,
+    "reset_time": "2026-11-01 00:00:00 UTC",
+    "monthly_usage": 30000,
+    "monthly_limit": 20000000,
+    "monthly_reset_time": "2026-11-01 00:00:00 UTC",
+    "daily_usage": 30000,
+    "daily_limit": 5000000,
+    "daily_reset_time": "2026-10-10 00:00:00 UTC",
+    "thinking_fit_limit": 0
+  },
+  "usage_after": {
+    "daily_tokens_used": 30000,
+    "daily_token_limit": 5000000,
+    "monthly_tokens_used": 30000,
+    "monthly_token_limit": 20000000,
+    "current_usage": 30000,
+    "usage_limit": 20000000,
+    "reset_time": "2026-11-01 00:00:00 UTC",
+    "monthly_usage": 30000,
+    "monthly_limit": 20000000,
+    "monthly_reset_time": "2026-11-01 00:00:00 UTC",
+    "daily_usage": 30000,
+    "daily_limit": 5000000,
+    "daily_reset_time": "2026-10-10 00:00:00 UTC",
+    "thinking_fit_limit": 0
+  },
+  "source_links": [
+    "https://docs.priorlabs.ai/models/selecting-model-version",
+    "https://docs.priorlabs.ai/api/metering",
+    "https://docs.priorlabs.ai/api/rate-limits",
+    "https://docs.priorlabs.ai/api/security",
+    "https://github.com/PriorLabs/tabpfn-client/blob/main/CHANGELOG.md",
+    "https://pypi.org/project/tabpfn-client/0.6.1/",
+    "https://github.com/PriorLabs/TabPFN/blob/main/src/tabpfn/architectures/tabpfn_v3_5.py",
+    "https://arxiv.org/pdf/2605.13986",
+    "https://storage.googleapis.com/prior-labs-tabpfn-public/reports/tabpfn-v3.5-report.pdf"
+  ],
+  "test_labels_used": false,
+  "blend_changed": false,
+  "automatic_prediction_retries": 0,
+  "budget_note": "Local requests bounded by server quotes plus 15% headroom; provider final billing may differ. Timeout/failed compute is never automatically retried.",
+  "historical_note": "TabPFN-3.5 was released September 2026; this is a retrospective foundation-model comparison, not a model available during 2024-25."
+}

@@ -56,3 +56,10 @@ At Simon's request, transaction costs are set to zero; borrow fees remain zero. 
 Simon requested the feature experiment before further paper work. The expanded schema keeps the original nine inputs and adds 15 features across skip-month momentum, proximity to the annual high, unusual dollar volume, volume-conditioned reversal, MAX and overnight/intraday decomposition. Each raw input also has an observable same-date percentile, giving 48 model inputs. [Exact formulas](alpha-features.md) are saved with the data manifest.
 
 The original raw snapshot, next-day target, model configurations and zero-cost holding strategy stay fixed. Complete one-year windows reduce the available training history; 2023 still selects stopping iterations and weights. A saved original-model comparison uses the same eligible test stocks. The current measured outcome is recorded in [the new results](../reports/alpha/RESULTS.md).
+
+
+## Long-only comparison — 8 October 2026
+
+Simon switched the strategy to long only and asked for every individual model and the blend to be shown on every run. The saved models and full forecasts stay frozen; all free cash now funds top 20 long additions and exits after prior-close ranks leave top 100. The new results and all model curves live in `reports/alpha`; the previous long/short result is archived. Performance improvement and comparison remain the current priority, with paper work deferred.
+
+TabPFN-3.5 is being evaluated as an additional API candidate using a fixed training-only context and explicit usage limits. Its forecasts, context schema and provider metadata are recorded separately; it does not silently replace the existing validation-selected blend.

@@ -325,6 +325,101 @@ class RankHoldTests(unittest.TestCase):
         assert_frame_equal(trades_a, trades_b)
         assert_frame_equal(positions_a, positions_b)
 
+    def test_long_only_deploys_all_cash_after_close_without_short_inventory(self):
+        summary, daily, trades, positions = self.run_book(long_fraction=1.0)
+        self.assertEqual(summary["strategy_name"], "rank_hold_long_only")
+        self.assertEqual(summary["long_fraction"], 1.0)
+        self.assertEqual(summary["short_fraction"], 0.0)
+        self.assertEqual(daily.iloc[0]["net_free_cash"], 1_000_000)
+        self.assertEqual(daily.iloc[0]["net_planned_entry_budget"], 1_000_000)
+        self.assertEqual(daily.iloc[1]["net_free_cash"], 0.0)
+        self.assertEqual(daily.iloc[1]["net_long_value"], 1_000_000)
+        self.assertTrue(trades["side"].eq("long").all())
+        self.assertTrue(positions["side"].eq("long").all())
+        for name in ["gross", "net"]:
+            for suffix in ["short_count", "short_collateral", "short_proceeds", "short_liability", "margin_debt"]:
+                self.assertTrue(daily[f"{name}_{suffix}"].eq(0.0).all())
+            np.testing.assert_allclose(daily[f"{name}_nav"], daily[f"{name}_free_cash"] + daily[f"{name}_long_value"])
+        first = self.book_trades(trades).iloc[0]
+        self.assertEqual(first["Ticker"], "AAA")
+        self.assertEqual(first["planned_budget"], 1_000_000)
+        self.assertEqual(first["notional"], 1_000_000)
+        self.assertEqual(first["quantity"], 10_000)
+        self.assertEqual(first["SignalDate"], self.dates[0])
+        self.assertEqual(first["ExecutionDate"], self.dates[1])
+        np.testing.assert_allclose(daily["gross_nav"], daily["net_nav"])
+
+    def test_long_only_single_stock_universe_invests_instead_of_halving_tail(self):
+        self.panel = self.panel.loc[self.panel["Ticker"].eq("AAA")]
+        self.predictions = self.predictions.loc[self.predictions["Ticker"].eq("AAA")]
+        summary, daily, trades, positions = self.run_book(long_fraction=1.0, entry_k=20, exit_k=100)
+        self.assertEqual(summary["net_final_long_count"], 1)
+        self.assertEqual(daily.iloc[0]["effective_entry_k"], 1)
+        self.assertEqual(daily.iloc[1]["net_free_cash"], 0)
+        self.assertEqual(daily.iloc[1]["net_long_value"], 1_000_000)
+        self.assertEqual(len(self.book_trades(trades)), 1)
+        self.assertTrue(positions["quantity"].eq(10_000).all())
+
+    def test_long_only_single_tail_can_select_all_small_universe_names(self):
+        _, daily, trades, _ = self.run_book(long_fraction=1.0, entry_k=20, exit_k=100)
+        first = self.book_trades(trades).loc[trades["ExecutionDate"].eq(self.dates[1])]
+        self.assertEqual(first["Ticker"].tolist(), ["AAA", "BBB", "CCC", "DDD"])
+        self.assertEqual(first["planned_budget"].sum(), 1_000_000)
+        self.assertTrue(first["planned_budget"].eq(250_000).all())
+        self.assertEqual(daily.iloc[0]["effective_entry_k"], 4)
+        self.assertEqual(daily.iloc[1]["net_long_count"], 4)
+
+    def test_long_only_rank_threshold_retention_exit_and_delayed_cash_reuse(self):
+        self.ranks(1, ["BBB", "AAA", "CCC", "DDD"])
+        self.ranks(2, ["BBB", "CCC", "AAA", "DDD"])
+        _, daily, trades, positions = self.run_book(long_fraction=1.0)
+        gross = self.book_trades(trades)
+        exit_aaa = gross.loc[gross["action"].eq("exit") & gross["Ticker"].eq("AAA")]
+        self.assertEqual(len(exit_aaa), 1)
+        self.assertEqual(exit_aaa.iloc[0]["rank"], 3)
+        self.assertEqual(exit_aaa.iloc[0]["SignalDate"], self.dates[2])
+        self.assertEqual(exit_aaa.iloc[0]["ExecutionDate"], self.dates[3])
+        self.assertEqual(daily.iloc[2]["gross_long_count"], 1)
+        self.assertEqual(daily.iloc[2]["gross_planned_entry_budget"], 0.0)
+        self.assertEqual(daily.iloc[3]["gross_long_count"], 0)
+        self.assertEqual(daily.iloc[3]["gross_free_cash"], 1_000_000)
+        self.assertEqual(daily.iloc[3]["gross_planned_entry_budget"], 1_000_000)
+        reentries = gross.loc[gross["action"].eq("entry") & gross["ExecutionDate"].eq(self.dates[4])]
+        self.assertEqual(len(reentries), 1)
+        self.assertTrue(positions.loc[positions["Date"].eq(self.dates[2]), "side"].eq("long").all())
+
+    def test_long_only_missing_fill_keeps_all_cash_and_retries_original_top_name(self):
+        self.price("AAA", 1, "ExecutionAverage", np.nan)
+        _, daily, trades, _ = self.run_book(long_fraction=1.0)
+        self.assertEqual(daily.iloc[1]["gross_free_cash"], 1_000_000)
+        self.assertEqual(daily.iloc[1]["gross_long_count"], 0)
+        first = self.book_trades(trades).iloc[0]
+        self.assertEqual(first["Ticker"], "AAA")
+        self.assertEqual(first["status"], "missing_entry_fill")
+        self.assertEqual(daily.iloc[2]["gross_free_cash"], 0)
+        self.assertEqual(daily.iloc[2]["gross_long_count"], 1)
+
+    def test_long_only_fee_budget_remains_funded_without_creating_short_liabilities(self):
+        summary, daily, trades, _ = self.run_book(long_fraction=1.0, cost_bps=10)
+        first = self.book_trades(trades, "net").iloc[0]
+        self.assertAlmostEqual(first["notional"] + first["cost"], 1_000_000)
+        self.assertAlmostEqual(daily.iloc[1]["net_long_value"], 1_000_000 / 1.001)
+        self.assertAlmostEqual(summary["net_transaction_costs"], 1_000_000 * 0.001 / 1.001)
+        self.assertTrue(daily["net_short_liability"].eq(0).all())
+
+    def test_short_only_single_tail_preserves_engine_compatibility_and_truthful_name(self):
+        self.panel = self.panel.loc[self.panel["Ticker"].eq("DDD")]
+        self.predictions = self.predictions.loc[self.predictions["Ticker"].eq("DDD")]
+        summary, daily, trades, _ = self.run_book(long_fraction=0.0, entry_k=20, exit_k=100)
+        self.assertEqual(summary["strategy_name"], "rank_hold_short_only")
+        self.assertEqual(daily.iloc[0]["effective_entry_k"], 1)
+        self.assertEqual(daily.iloc[1]["net_free_cash"], 0.0)
+        self.assertEqual(daily.iloc[1]["net_short_collateral"], 1_000_000)
+        self.assertEqual(daily.iloc[1]["net_short_proceeds"], 1_000_000)
+        self.assertEqual(daily.iloc[1]["net_short_liability"], 1_000_000)
+        self.assertEqual(daily.iloc[1]["net_nav"], 1_000_000)
+        self.assertTrue(trades["side"].eq("short").all())
+
     def test_small_universe_and_ties_have_disjoint_stable_tails(self):
         self.predictions["prediction"] = 0.0
         self.predictions = self.predictions.sample(frac=1, random_state=11)

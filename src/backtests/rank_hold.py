@@ -1,4 +1,4 @@
-"""Persistent, cash-funded long/short simulation with next-session OHLC4 fills.
+"""Persistent, cash-funded rank-and-hold simulation with next-session OHLC4 fills.
 
 This is a research approximation: a day's OHLC4 is known only after that day,
 so it is a simulated fill, not an executable quote or guaranteed execution.
@@ -97,21 +97,23 @@ def _inputs(panel, predictions, prediction_column, start_date):
     return calendar, submitted, prices, by_date
 
 
-def _ranks(signals, entry_k):
+def _ranks(signals, entry_k, long_fraction=0.5):
     """One canonical ranking makes opposite tails disjoint even under ties.
 
     Descending score uses ticker ascending for ties. Short ascending rank is
     the reverse of that total ordering, so tied tickers reverse on the short
-    side. If the universe is smaller than 2*k, each side uses floor(n/2).
+    side. Two enabled tails use at most floor(n/2) names each. A single
+    enabled tail can use every eligible name, up to entry_k.
     """
     ordered = signals.sort_values(["prediction", "Ticker"], ascending=[False, True], kind="stable")
     tickers = ordered["Ticker"].tolist()
     scores = dict(zip(ordered["Ticker"], ordered["prediction"]))
     long_ranks = {ticker: i + 1 for i, ticker in enumerate(tickers)}
     short_ranks = {ticker: i + 1 for i, ticker in enumerate(reversed(tickers))}
-    effective_k = min(entry_k, len(tickers) // 2)
-    long_entries = tickers[:effective_k]
-    short_entries = list(reversed(tickers[-effective_k:])) if effective_k else []
+    available = len(tickers) if long_fraction in (0.0, 1.0) else len(tickers) // 2
+    effective_k = min(entry_k, available)
+    long_entries = tickers[:effective_k] if long_fraction > 0 else []
+    short_entries = list(reversed(tickers[-effective_k:])) if effective_k and long_fraction < 1 else []
     return long_ranks, short_ranks, long_entries, short_entries, scores
 
 
@@ -305,6 +307,8 @@ def evaluate_rank_hold(
     Rank at the completed session close. Enter the top/bottom k at the next
     observed session's supplied ExecutionAverage; retain each side until its
     own rank exceeds exit_k (or it is unranked if exit_unranked=True).
+    long_fraction=1 enables only long entries; zero enables only shorts.
+    A single enabled side can select min(entry_k, eligible_count) names.
     Mark at that session's supplied MarkClose. No forced final liquidation.
 
     Only free cash already known on SignalDate funds entry plans, split by
@@ -346,9 +350,9 @@ def evaluate_rank_hold(
     for index, date in enumerate(calendar):
         row = {"Date": date}
         signals = by_date.get(date, submitted.iloc[:0])
-        rank_data = _ranks(signals, entry_k)
+        rank_data = _ranks(signals, entry_k, long_fraction)
         row["eligible_count"] = len(signals)
-        row["effective_entry_k"] = len(rank_data[2])
+        row["effective_entry_k"] = max(len(rank_data[2]), len(rank_data[3]))
         following = calendar[index + 1] if index + 1 < len(calendar) else pd.NaT
         for name, book in books.items():
             trades, turnover_notional, fees = _execute(book, queued[name], prices, date)
@@ -389,6 +393,19 @@ def evaluate_rank_hold(
         if not valid:
             for key in ["cumulative_return", "annualized_return", "annualized_sharpe", "annualized_volatility", "max_drawdown"]:
                 metrics[key] = np.nan
+    strategy_name = ("rank_hold_long_only" if long_fraction == 1.0
+                     else "rank_hold_short_only" if long_fraction == 0.0
+                     else "rank_hold_long_short")
+    limitations = [
+        "OHLC4 is a simulated average known only after the execution day, not a guaranteed attainable trade price.",
+        "Transaction costs, spread and market impact need stronger research assumptions.",
+        "Rank-based exits can retain positions for long periods; no stop-loss, forced margin liquidation or liquidity limit is modeled.",
+        "Any emergency external-credit shortfall or insolvency invalidates headline performance; later ledger recovery is not a valid strategy recovery.",
+        "The supplied adjusted price basis must be consistent for fills, marks and historical inventory.",
+    ]
+    if long_fraction < 1:
+        limitations.insert(1, "All selected short stocks are assumed shortable. Locate failures, recalls and real margin requirements are unmodeled.")
+        limitations.insert(2, "Borrow fees default to zero; realistic short borrowing costs require additional data.")
     summary = {
         "initial_capital": float(initial_capital), "entry_k": int(entry_k), "exit_k": int(exit_k),
         "long_fraction": float(long_fraction), "short_fraction": float(1 - long_fraction),
@@ -397,7 +414,7 @@ def evaluate_rank_hold(
         "start_date": calendar[0].strftime("%Y-%m-%d"), "end_date": calendar[-1].strftime("%Y-%m-%d"),
         "first_execution_date": calendar[1].strftime("%Y-%m-%d") if len(calendar) > 1 else None,
         "calendar_sessions": int(len(calendar)), "return_sessions": int(len(calendar) - 1),
-        "strategy_name": "rank_hold_long_short",
+        "strategy_name": strategy_name,
         "trading_dates": int(len(calendar) - 1), "aggregate_resolved_dates": int(len(calendar) - 1),
         "aggregate_excluded_unresolved_dates": 0,
         "final_net_equity": net["final_nav"], "final_gross_equity": gross["final_nav"],
@@ -426,18 +443,15 @@ def evaluate_rank_hold(
         "performance_valid": gross_valid and net_valid, "fully_resolved": gross_valid and net_valid,
         "performance_invalidation_reason": None if gross_valid and net_valid else "A funding shortfall or insolvency required unmodeled external credit; accounting NAV remains auditable, but performance statistics are invalid.",
         "price_units": str(price_units),
-        "allocation_policy": "Only cash known at signal close funds next-session entries; split by side, then equally among selected names. Exit releases can fund the following signal, not same-session buys.",
-        "short_accounting": "Short collateral and sale proceeds are segregated; neither finances new entries. NAV subtracts marked short liabilities and any margin-shortfall debt.",
-        "tie_policy": "Descending score then ticker ascending; short order reverses the same total ranking, ensuring disjoint tails.",
-        "small_universe_policy": "Each entry tail contains min(entry_k, floor(eligible_count/2)) securities.",
+        "allocation_policy": ("All free cash known at signal close funds next-session long entries equally among selected top-ranked names. Exit releases can fund the following signal, not same-session buys."
+                              if long_fraction == 1.0 else "Only cash known at signal close funds next-session entries; split by side, then equally among selected names. Exit releases can fund the following signal, not same-session buys."),
+        "short_accounting": ("No short positions, short collateral, short-sale proceeds or short liabilities."
+                             if long_fraction == 1.0 else "Short collateral and sale proceeds are segregated; neither finances new entries. NAV subtracts marked short liabilities and any margin-shortfall debt."),
+        "tie_policy": ("Descending score then ticker ascending." if long_fraction == 1.0
+                       else "Descending score then ticker ascending; short order reverses the same total ranking, ensuring disjoint tails."),
+        "small_universe_policy": ("The single enabled entry tail contains min(entry_k, eligible_count) securities."
+                                  if long_fraction in (0.0, 1.0) else "Each entry tail contains min(entry_k, floor(eligible_count/2)) securities."),
         "terminal_policy": "Open positions marked at final close; no forced liquidation or invented terminal commission.",
-        "limitations": [
-            "OHLC4 is a simulated average known only after the execution day, not a guaranteed attainable trade price.",
-            "All selected stocks are assumed shortable. Locate failures, recalls and real margin requirements are unmodeled.",
-            "Borrow fees default to zero; fees, spread and market impact need stronger research assumptions.",
-            "Rank-based exits can retain positions for long periods; no stop-loss, forced margin liquidation or liquidity limit is modeled.",
-            "Any emergency external-credit shortfall or insolvency invalidates headline performance; later ledger recovery is not a valid strategy recovery.",
-            "The supplied adjusted price basis must be consistent for fills, marks and historical inventory.",
-        ],
+        "limitations": limitations,
     }
     return summary, daily, trades, positions

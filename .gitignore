@@ -41,3 +41,13 @@ reports/showcase/positions.parquet
 models/alpha/
 
 reports/alpha/*.parquet
+
+reports/alpha/**/*.parquet
+
+models/tabpfn/
+
+reports/tabpfn/*.parquet
+
+.venv-tabpfn/
+
+reports/tabpfn/**/*.parquet
