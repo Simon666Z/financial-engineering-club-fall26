@@ -113,7 +113,7 @@ def prepare_price_panel(raw_panel, metadata=None):
     groups = panel.groupby("Ticker", sort=False)
     # Tomorrow's return is the learning target. Trades use separate entry and exit prices.
     panel["LabelEndDate"] = groups["Date"].shift(-1)
-    panel["target"] = groups["Adj Close"].shift(-1) / panel["Adj Close"] - 1
+    panel["target"] = (groups["Close"].shift(-1) / groups["Open"].shift(-1) - 1)
     panel["target"] = panel["target"].replace([np.inf, -np.inf], np.nan)
 
     audit["valid_quote_rows"] = int(panel["QuoteValid"].sum())

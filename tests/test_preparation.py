@@ -46,7 +46,7 @@ class PreparationTests(unittest.TestCase):
         returns = prices["Adj Close"].pct_change(fill_method=None)
         self.assertAlmostEqual(row["vol_20d"], returns.iloc[51:71].std())
         self.assertAlmostEqual(row["volume_ratio_20d"], prices.loc[70, "Volume"] / prices.loc[51:70, "Volume"].mean())
-        self.assertAlmostEqual(row["target"], prices.loc[71, "Adj Close"] / prices.loc[70, "Adj Close"] - 1)
+        self.assertAlmostEqual(row["target"], prices.loc[71, "Close"] / prices.loc[71, "Open"] - 1)
         self.assertEqual(row["LabelEndDate"], self.dates[71])
         self.assertFalse(self.row(panel, "AAA", 59)["SignalEligible"])
         self.assertTrue(self.row(panel, "AAA", 60)["SignalEligible"])
